@@ -1,0 +1,15 @@
+# Cursor project rules - AI Content Breaker
+
+This project is governed by PROJECT_CONTEXT.md in the repo root.
+Read PROJECT_CONTEXT.md fully before starting ANY task and follow it exactly.
+
+Non-negotiables (details in PROJECT_CONTEXT.md):
+- Build MVP-first, one module at a time (M0..M7). STOP after each step and report
+  before starting the next module. Do not one-shot the whole system.
+- If a package fails to install on Python 3.14, STOP and report the exact error.
+  Do not silently swap libraries.
+- Diagnose bugs with a root-cause explanation before fixing. One fix at a time.
+- Readable Python, short meaningful names, docstrings + comments. Not lab C style.
+- Keep interface contracts (Token, symbol table, parse tree, feature vector,
+  verdict) exactly as defined in PROJECT_CONTEXT.md.
+- Use `python -m pip` and the existing .venv. Fully offline except the RAID pull.

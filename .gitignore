@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Project data & model artifacts (regenerated locally; RAID subset not redistributed)
+data/*.csv
+models/
+
+# nltk downloaded data if placed in-repo
+nltk_data/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/
