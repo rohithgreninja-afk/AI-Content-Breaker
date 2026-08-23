@@ -25,6 +25,19 @@
 - Packages installed clean on 3.14: requests, nltk, scikit-learn, numpy, datasets.
 - HF rows API is rate-limited; prefer streaming for any future dataset work.
 
-## Next: M2 - Symbol table
-- Build word identity/frequency/positions over the M1 token stream.
-- Contract: dict word -> {count: int, positions: list[int]}.
+## M2 - Symbol table (DONE, verified)
+- `src/m2_symtab.py`: `build_symtab(tokens) -> dict word -> {count, positions}`.
+- **Identity:** WORD values are case-folded with `.lower()` so `The`/`the` merge.
+- **Indexed types:** WORD only. NUMBER, PUNCT, and SENTENCE_END are not entered
+  (lexical_diversity and transition_phrase_density stay word-based).
+- **Positions:** M1 token `idx` values (stream positions; gaps from skipped types).
+- Tests: 5 cases in `tests/test_m2_symtab.py` (all passed).
+- Real RAID row (`id=7db2f15a-...`, ai/abstracts): 299 tokens, 157 unique words.
+  Top counts: the 19, of 14, and 8, to 7, a 6, our 6, graph 5, images 5, we 5,
+  feature 4. Positions for `the` start at lexer idxs [51, 61, 109, ...].
+- Run demo: `.venv\Scripts\python.exe src\m2_symtab.py`
+- Run tests: `.venv\Scripts\python.exe tests\test_m2_symtab.py`
+
+## Next: M3 - Dual syntax
+- (a) recursive-descent CFG parser -> per-sentence parse trees
+- (b) DFA over POS-tag sequences -> template signal
