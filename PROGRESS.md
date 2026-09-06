@@ -38,6 +38,14 @@
 - Run demo: `.venv\Scripts\python.exe src\m2_symtab.py`
 - Run tests: `.venv\Scripts\python.exe tests\test_m2_symtab.py`
 
+## Repo hygiene (done)
+- Removed `.cursorrules` from git tracking (`git rm --cached`); file stays
+  locally for Cursor but is no longer pushed to GitHub.
+- Added `.cursor/` and `.cursorrules` to `.gitignore` so they can't be
+  re-added accidentally.
+- Committed and pushed as `chore: remove cursor rules from tracking, update gitignore`.
+- Tracked files are now code + docs only; no IDE artefacts in the remote.
+
 ## Next: M3 - Dual syntax
 - (a) recursive-descent CFG parser -> per-sentence parse trees
 - (b) DFA over POS-tag sequences -> template signal
