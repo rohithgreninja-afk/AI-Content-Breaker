@@ -4,7 +4,7 @@ Compiler-design course project: an AI-generated-text detector that maps the
 compiler front-end (lexing, symbol table, CFG parsing, automata, attribute
 grammars) onto a text-analysis pipeline.
 
-**Author:** Rohith Ram V, VIT, Compiler Design (BCSE307P/L).
+
 
 This repo is built module-by-module (M0..M7). See `PROJECT_CONTEXT.md` for
 architecture and interface contracts, and `PROGRESS.md` for what currently
