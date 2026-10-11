@@ -20,12 +20,45 @@ Python 3.14 in `.venv` at the repo root. Install deps with the venv interpreter:
 
 ## Current status
 
-M0 (dataset pull) and M1 (lexer) are in place. Later modules are not started yet.
+M0–M5 are in place, with 92 tests passing. On the 760-row RAID sample
+(400 human / 360 AI):
+
+| scorer | accuracy | notes |
+|---|---|---|
+| M5a rule-based | 0.816 held-out | 18 thresholded rules, fully inspectable |
+| M5b logistic regression | 0.847 test | ROC-AUC 0.941, 5-fold CV 0.867 ± 0.031 |
+
+## Pipeline
+
+| module | does | public entry point |
+|---|---|---|
+| `m0_dataset.py` | streams + balances RAID into CSV | `main()` |
+| `m1_lexer.py` | maximal-munch lexer | `tokenize(text)` |
+| `m2_symtab.py` | symbol table over the token stream | `build_symtab(tokens)` |
+| `m3_parser.py` | recursive-descent CFG **and** template DFA | `parse_text(text)` |
+| `m4_features.py` | 89-feature vector from M1–M3 | `extract_features(text)` |
+| `m5_scorer.py` | rule scorer + trained classifier | `RuleScorer`, `ModelScorer` |
+
+## Running it
+
+```
+.venv\Scripts\python.exe src\m0_dataset.py          # regenerate data/raid_clean.csv
+.venv\Scripts\python.exe src\m5_scorer.py --train   # fit, report, save the model
+.venv\Scripts\python.exe src\m5_scorer.py --score path\to\text.txt
+.venv\Scripts\python.exe src\m5_scorer.py --audit   # per-rule lift, for tuning
+```
+
+Each module also runs standalone as a demo on one real row, e.g.
+`.venv\Scripts\python.exe src\m3_parser.py`.
+
+First run downloads the nltk POS tagger (`averaged_perceptron_tagger_eng`).
+If that is unavailable, M3 falls back to a built-in rule tagger so the
+pipeline still runs offline.
 
 ## Layout
 
-- `src/` — pipeline modules (`m0_dataset.py`, `m1_lexer.py`, …)
-- `tests/` — smoke tests per module
+- `src/` — pipeline modules (`m0_dataset.py` … `m5_scorer.py`)
+- `tests/` — smoke tests per module (run any file directly)
 - `scripts/` — exploratory RAID probes (`pull_raid.py`, etc.)
-- `data/` — generated `raid_clean.csv` (not redistributed)
-- `models/` — trained classifier artifacts (later)
+- `data/` — generated `raid_clean.csv` (gitignored, not redistributed)
+- `models/` — trained classifier artifacts (gitignored, regenerate with `--train`)
