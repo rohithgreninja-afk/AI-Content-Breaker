@@ -1,0 +1,7 @@
+The proposed framework leverages a multi-layered attention mechanism to enhance
+contextual understanding across diverse linguistic patterns. Our results indicate
+a statistically significant improvement in classification accuracy, particularly
+in cases involving complex syntactic structures. Furthermore, the model
+demonstrates robust generalisation to out-of-distribution samples, suggesting
+that the learned representations capture meaningful semantic features beyond
+surface-level statistics.

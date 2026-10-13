@@ -20,7 +20,7 @@ Python 3.14 in `.venv` at the repo root. Install deps with the venv interpreter:
 
 ## Current status
 
-M0–M5 are in place, with 92 tests passing. On the 760-row RAID sample
+M0–M5 are in place, with 103 tests passing. On the 760-row RAID sample
 (400 human / 360 AI):
 
 | scorer | accuracy | notes |
@@ -38,6 +38,7 @@ M0–M5 are in place, with 92 tests passing. On the 760-row RAID sample
 | `m3_parser.py` | recursive-descent CFG **and** template DFA | `parse_text(text)` |
 | `m4_features.py` | 89-feature vector from M1–M3 | `extract_features(text)` |
 | `m5_scorer.py` | rule scorer + trained classifier | `RuleScorer`, `ModelScorer` |
+| `pipeline.py` | runs M1 to M5 on one text, stage by stage | `run_pipeline(text)` |
 
 ## Running it
 
@@ -46,6 +47,9 @@ M0–M5 are in place, with 92 tests passing. On the 760-row RAID sample
 .venv\Scripts\python.exe src\m5_scorer.py --train   # fit, report, save the model
 .venv\Scripts\python.exe src\m5_scorer.py --score path\to\text.txt
 .venv\Scripts\python.exe src\m5_scorer.py --audit   # per-rule lift, for tuning
+.venv\Scripts\python.exe src\pipeline.py --test 1     # one held-out test row through M1-M5, stage by stage
+.venv\Scripts\python.exe src\pipeline.py --eval       # all 190 test rows: accuracy for both scorers
+.venv\Scripts\python.exe -m unittest discover -s tests  # run all 103 tests
 ```
 
 Each module also runs standalone as a demo on one real row, e.g.
@@ -61,4 +65,4 @@ pipeline still runs offline.
 - `tests/` — smoke tests per module (run any file directly)
 - `scripts/` — exploratory RAID probes (`pull_raid.py`, etc.)
 - `data/` — generated `raid_clean.csv` (gitignored, not redistributed)
-- `models/` — trained classifier artifacts (gitignored, regenerate with `--train`)
+- `models/` — trained classifier artifacts (gitignored, not committed; regenerate with `.venv\Scripts\python.exe src\m5_scorer.py --train`)
