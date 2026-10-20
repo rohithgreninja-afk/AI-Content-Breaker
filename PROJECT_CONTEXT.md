@@ -60,8 +60,9 @@ metaphor. Build order follows the module numbers M0..M7.
 - M3 Dual Syntax      -> (a) recursive-descent CFG parser -> per-sentence parse
                          trees; (b) DFA over POS-tag sequences -> template signal
 - M4 Attribute Comp   -> bottom-up synthesized attributes -> FEATURE VECTOR
-- M5 Hybrid Scoring   -> rule-based attr-grammar score ENSEMBLED with logistic
-                         regression on the same feature vector -> verdict
+- M5 Scoring          -> inspectable rule score plus a trained classifier on
+                         the same feature vector -> verdict. Logistic is the
+                         reference; training-only selection now uses ExtraTrees.
 - M6 Robustness Harness-> re-run M1..M5 on perturbed text, measure verdict shift
 - M7 CLI / Reporting  -> single entry point: text/file in -> verdict + report out
 
@@ -87,9 +88,13 @@ metaphor. Build order follows the module numbers M0..M7.
 - Phase A (MVP): rule-based score only = hand-weighted combination of the 6
   features, framed as bottom-up synthesized-attribute evaluation. Deterministic,
   no training needed. Verdict from a threshold. Ship this first.
-- Phase B: train logistic regression on RAID feature vectors, then ensemble
-  rule_score and clf_score into confidence. Placeholder weights are fine until
-  the dataset is materialized; mark them clearly as placeholders.
+- Phase B: retain logistic regression as the reference classifier. The current
+  trained M5b is ExtraTrees over M4's fixed 89-feature vector, selected using
+  only the saved training groups. Do not blend the historically tuned M5a
+  rules into model selection. See README for the current four-source dataset
+  and `m5_training.py --select` / `--finalize` workflow. Preserve the saved
+  train/test IDs, 50-word gate, and 0.5 threshold; commit the selection record
+  before final holdout evaluation. Do not tune using heldout results.
 
 ## M6 robustness harness - framing is a hard boundary
 - Purpose: measure OUR OWN detector's fragility, per attribute. It is a
