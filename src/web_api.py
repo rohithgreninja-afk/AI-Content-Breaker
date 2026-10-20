@@ -10,6 +10,7 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import threading
@@ -80,6 +81,8 @@ class ApplicationState:
         self.model = None
         self.model_error = ""
         self.training = {"running": False, "phase": "idle", "logs": [], "error": None}
+        self.stopping = threading.Event()
+        self.training_process = None
 
     def _load_model(self) -> None:
         signature = pipeline._model_signature()
@@ -132,6 +135,8 @@ class ApplicationState:
     def start_training(self) -> tuple[int, dict]:
         """Train only when necessary, and never start duplicate concurrent jobs."""
         with self.lock:
+            if self.stopping.is_set():
+                return 503, {"error": "The server is shutting down. Restart npm run dev before training."}
             status = self.status()
             if status["ready"]:
                 return 200, status
@@ -146,18 +151,42 @@ class ApplicationState:
 
     def _command(self, arguments: list[str], phase: str) -> None:
         with self.lock:
+            if self.stopping.is_set():
+                raise RuntimeError("Training stopped because the server is shutting down.")
             self.training["phase"] = phase
+            creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            process = subprocess.Popen([sys.executable, "-u", *arguments], cwd=ROOT,
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       text=True, encoding="utf-8", errors="replace",
+                                       creationflags=creationflags,
+                                       env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+            self.training_process = process
         self._log(phase)
-        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-        with subprocess.Popen([sys.executable, "-u", *arguments], cwd=ROOT,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              text=True, encoding="utf-8", errors="replace",
-                              creationflags=creationflags,
-                              env={**os.environ, "PYTHONIOENCODING": "utf-8"}) as process:
-            for line in process.stdout:
-                self._log(line.rstrip())
-            if process.wait() != 0:
-                raise RuntimeError(f"{phase} failed. Review the training log and README setup instructions.")
+        try:
+            with process:
+                for line in process.stdout:
+                    self._log(line.rstrip())
+                if process.wait() != 0:
+                    raise RuntimeError(f"{phase} failed. Review the training log and README setup instructions.")
+        finally:
+            with self.lock:
+                if self.training_process is process:
+                    self.training_process = None
+
+    def stop_training(self) -> None:
+        """Stop the owned training subprocess before the API exits normally."""
+        with self.lock:
+            self.stopping.set()
+            process = self.training_process
+        if process is not None and process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+            except ProcessLookupError:
+                pass
 
     def _train(self) -> None:
         try:
@@ -171,8 +200,10 @@ class ApplicationState:
             with self.lock:
                 self.signature = object()
             if not self.status()["ready"]:
-                if not Path(DATA_PATH).exists():
-                    self._command(["src/m0_dataset.py"], "Fetching the pinned training datasets")
+                dataset = Path(DATA_PATH)
+                manifest = dataset.parent / "train_manifest.json"
+                if not dataset.exists() or not manifest.exists():
+                    self._command(["src/m0_dataset.py", "--parquet"], "Fetching the pinned training datasets")
                 self._command(["src/web_training.py"], "Training the committed classifier")
             with self.lock:
                 self.signature = object()
@@ -294,12 +325,18 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
     server = create_server(args.port)
+
+    def stop_on_signal(_signal, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop_on_signal)
     print(f"AI Content Breaker API: http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        server.state.stop_training()
         server.server_close()
 
 

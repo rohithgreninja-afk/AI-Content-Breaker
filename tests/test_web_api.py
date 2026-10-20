@@ -93,6 +93,44 @@ class TestModelState(unittest.TestCase):
                 self.assertEqual(state.start_training()[0], 202)
                 worker.return_value.start.assert_called_once()
 
+    def test_existing_csv_without_manifest_regenerates_dataset_before_training(self):
+        state = web_api.ApplicationState()
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "train_clean.csv"
+            dataset.write_text("id,label,text\n", encoding="utf-8")
+            with patch.object(web_api, "DATA_PATH", str(dataset)), \
+                    patch.object(state, "status", return_value={"ready": False}), \
+                    patch.object(state, "_load_model"), patch.object(state, "_command") as command:
+                state._train()
+        self.assertEqual(command.call_args_list[0].args[0], ["src/m0_dataset.py", "--parquet"])
+        self.assertEqual(command.call_args_list[1].args[0], ["src/web_training.py"])
+
+    def test_shutdown_terminates_owned_training_subprocess(self):
+        state = web_api.ApplicationState()
+        started = threading.Event()
+        errors = []
+
+        def run_command():
+            try:
+                state._command(["-c", "import time; print('started', flush=True); time.sleep(60)"], "test")
+            except RuntimeError as error:
+                errors.append(str(error))
+
+        with patch.object(state, "_log", side_effect=lambda line: started.set() if line == "started" else None):
+            worker = threading.Thread(target=run_command, daemon=True)
+            worker.start()
+            try:
+                self.assertTrue(started.wait(timeout=5), "Training subprocess did not start")
+                process = state.training_process
+                state.stop_training()
+                worker.join(timeout=5)
+                self.assertFalse(worker.is_alive())
+                self.assertIsNotNone(process.returncode)
+                self.assertTrue(errors)
+                self.assertEqual(state.start_training()[0], 503)
+            finally:
+                state.stop_training()
+
 
 class TestHTTPContract(unittest.TestCase):
     @classmethod
