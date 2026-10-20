@@ -454,7 +454,9 @@ def dataset_metadata(path: str = DATA_PATH,
         raise ValueError("dataset manifest contains invalid group assignments")
     result.update(groups=[row_groups[row_id] for row_id in result["row_ids"]],
                   dataset_sources=manifest.get("sources", {}),
-                  manifest_sha256=dataset_sha256(manifest_path))
+                  manifest_sha256=hashlib.sha256(json.dumps(
+                      manifest, sort_keys=True, ensure_ascii=False,
+                      separators=(",", ":")).encode("utf-8")).hexdigest())
     return result
 
 

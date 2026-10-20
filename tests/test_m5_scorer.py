@@ -453,6 +453,17 @@ class TestDatasetProvenance(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differs from its manifest"):
             dataset_metadata(self.path)
 
+    def test_manifest_digest_ignores_platform_newlines_and_json_layout(self):
+        self.write_manifest()
+        expected = dataset_metadata(self.path)["manifest_sha256"]
+        path = os.path.join(self.tmp.name, "train_manifest.json")
+        with open(path, "w", encoding="utf-8", newline="\r\n") as handle:
+            json.dump(self.manifest, handle, indent=2, sort_keys=True)
+        self.assertEqual(dataset_metadata(self.path)["manifest_sha256"], expected)
+        self.manifest["row_groups"]["a"] = "changed"
+        self.write_manifest()
+        self.assertNotEqual(dataset_metadata(self.path)["manifest_sha256"], expected)
+
     def test_missing_or_incomplete_manifest_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "manifest missing"):
             dataset_metadata(self.path)
