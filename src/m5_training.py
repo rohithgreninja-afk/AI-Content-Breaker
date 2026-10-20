@@ -260,6 +260,10 @@ def finalize() -> None:
     anchor = ModelScorer.load()
     train, test = fixed_partition(rows, provenance, anchor.metadata)
     previous_model_sha256 = dataset_sha256(MODEL_PATH)
+    previous_report_path = ROOT / "models" / "training_report.json"
+    previous_report = json.loads(previous_report_path.read_text(encoding="utf-8"))
+    if any(previous_report.get(key) != value for key, value in anchor.metadata.items()):
+        raise ValueError("previous model/report provenance differs")
     model = ModelScorer(pipeline=build_estimator(winner["config"]))
     reference = ModelScorer(pipeline=build_estimator({"family": "logreg", "C": 10.0}))
     with threadpool_limits(limits=2):
@@ -308,6 +312,8 @@ def finalize() -> None:
               "test_source_counts": dict(Counter(rows[i]["domain"].split(":", 1)[0] for i in test)),
               "evaluation": evaluation, "baseline_evaluation": baseline,
               "baseline_estimator_config": {"family": "logreg", "C": 10.0},
+              "baseline_note": "The C=10 reference is freshly refitted using the two-thread training control; its numerical solver path can differ slightly from the previously published model.",
+              "previous_published_evaluation": previous_report["evaluation"],
               "previous_model_sha256": previous_model_sha256,
               "model_selection": {"winner": winner["name"], "metrics": winner["metrics"],
                                   "test_used_for_selection": False, "cv_note": selection["cv_note"]},
