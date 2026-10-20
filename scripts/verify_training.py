@@ -145,6 +145,8 @@ def _refit_and_compare(model, vectors, labels, train_indices, report: dict) -> d
 
 
 def verify() -> dict:
+    from threadpoolctl import threadpool_limits
+
     model = ModelScorer.load()
     provenance = dataset_metadata()
     rows = load_dataset_rows()
@@ -185,7 +187,8 @@ def verify() -> dict:
     test = [by_id[row["id"]] for row in heldout]
     refit = _refit_and_compare(model, X, y, train, report)
 
-    combined_probs = model.pipeline.predict_proba(X[test])[:, 1]
+    with threadpool_limits(limits=2):
+        combined_probs = model.pipeline.predict_proba(X[test])[:, 1]
     combined = _classification_metrics([labels[i] for i in test], combined_probs)
     recorded = report["evaluation"]["overall"]["all_rows"]["model"]
     if combined != recorded:
@@ -196,8 +199,9 @@ def verify() -> dict:
         raise ValueError("combined training has no MAGE training rows")
     # Fixed historical C: comparison cannot select hyperparameters on test data.
     baseline = ModelScorer._build_pipeline(C=30.0)
-    baseline.fit(X[mage_train], y[mage_train])
-    baseline_probs = baseline.predict_proba(X[test])[:, 1]
+    with threadpool_limits(limits=2):
+        baseline.fit(X[mage_train], y[mage_train])
+        baseline_probs = baseline.predict_proba(X[test])[:, 1]
     comparison = {}
     for source in ["overall"] + sorted(provenance["dataset_sources"]):
         positions = [j for j, i in enumerate(test) if source == "overall"
