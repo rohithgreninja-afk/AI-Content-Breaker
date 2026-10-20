@@ -6,8 +6,9 @@ Two scorers that share one feature extractor and one interface
 M5a  RuleScorer    hand-tuned thresholds over named M4 features. No training,
                    fully inspectable: it reports which rules fired and what
                    each contributed.
-M5b  ModelScorer   logistic regression on M4 vectors, with a train/test split
-                   and an accuracy report. Persists to models/ as a .joblib.
+M5b  ModelScorer   probabilistic classifier on M4 vectors. Supports the original
+                   logistic regression helpers and selected nonlinear models;
+                   persists the pipeline and provenance to models/ as a .joblib.
 
 Tuning is deliberately data-driven but hand-held: RULES below is a plain list
 of (feature, direction, threshold, weight) rows, each one a claim about the
@@ -19,6 +20,8 @@ CLI:
     python src/m5_scorer.py --train         fit, report, and save the model
     python src/m5_scorer.py --train --select-c  choose C using training groups
     python src/m5_scorer.py --score FILE    score one text file with both
+
+For train-only selection among classifier families, use m5_training.py.
 """
 
 from __future__ import annotations
@@ -178,7 +181,7 @@ class RuleScorer:
 
 
 # --------------------------------------------------------------------------
-# M5b: logistic regression classifier
+# M5b: trainable classifier, including the original logistic-regression helpers
 # --------------------------------------------------------------------------
 
 class ModelScorer:
