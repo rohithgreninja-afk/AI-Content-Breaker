@@ -420,6 +420,112 @@ class TestModelScorer(unittest.TestCase):
             self.assertIn("scikit-learn", record["versions"])
 
 
+class TestNonlinearModelCompatibility(unittest.TestCase):
+    """The scorer and verifier support explicit, deterministic nonlinear recipes."""
+
+    @classmethod
+    def setUpClass(cls):
+        import numpy as np
+        from m5_estimators import build_estimator
+        from threadpoolctl import threadpool_limits
+
+        cls.features, cls.labels = _synthetic_dataset(40)
+        cls.vectors = np.asarray([to_vector(features) for features in cls.features])
+        cls.truth = np.asarray([int(label == AI_LABEL) for label in cls.labels])
+        cls.config = {"family": "hist_gradient_boosting", "max_iter": 8,
+                      "learning_rate": 0.1, "max_leaf_nodes": 7,
+                      "min_samples_leaf": 2, "l2_regularization": 1.0}
+        cls.pipeline = build_estimator(cls.config)
+        with threadpool_limits(limits=2):
+            cls.pipeline.fit(cls.vectors, cls.truth)
+
+    def test_nonlinear_save_load_and_scoring_preserve_public_interface(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = os.path.join(temporary, "model.joblib")
+            model = ModelScorer(self.pipeline, metadata={"estimator_config": self.config})
+            model.save(path)
+            loaded = ModelScorer.load(path)
+            self.assertEqual(loaded.score_features(self.features[0]),
+                             model.score_features(self.features[0]))
+            with self.assertRaisesRegex(ValueError, "no signed linear"):
+                loaded.top_coefficients()
+
+    def test_load_rejects_changed_recorded_estimator_recipe(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = os.path.join(temporary, "model.joblib")
+            changed = {**self.config, "learning_rate": 0.2}
+            ModelScorer(self.pipeline, metadata={"estimator_config": changed}).save(path)
+            with self.assertRaisesRegex(ValueError, "recorded configuration"):
+                ModelScorer.load(path)
+
+    def test_nested_voting_recipe_validation_matches_fitted_pipeline(self):
+        from m5_estimators import build_estimator
+        from threadpoolctl import threadpool_limits
+
+        config = {"family": "soft_vote", "logreg_C": 1.0,
+                  "hgb": {key: value for key, value in self.config.items() if key != "family"},
+                  "weights": [1.0, 2.0]}
+        fitted = build_estimator(config)
+        with threadpool_limits(limits=2):
+            fitted.fit(self.vectors, self.truth)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = os.path.join(temporary, "model.joblib")
+            ModelScorer(fitted, metadata={"estimator_config": config}).save(path)
+            self.assertEqual(ModelScorer.load(path).metadata["estimator_config"], config)
+
+    def test_verifier_accepts_fixed_boosting_budget_and_reproduces_trees(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from verify_training import _refit_and_compare
+
+        model = ModelScorer(self.pipeline, metadata={"estimator_config": self.config})
+        result = _refit_and_compare(model, self.vectors, self.truth,
+                                    list(range(len(self.truth))), {"metrics": {}})
+        self.assertEqual(result["prediction_max_abs_difference"], 0.0)
+        self.assertTrue(all(value == 0.0 for value in result["parameter_differences"].values()))
+        detail = result["training_iterations"][0]
+        self.assertEqual(detail["status"], "fixed_budget_completed")
+        self.assertEqual(detail["iterations"], self.config["max_iter"])
+
+    def test_verifier_preserves_legacy_logistic_parameter_checks(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from verify_training import _refit_and_compare
+        from threadpoolctl import threadpool_limits
+
+        fitted = ModelScorer._build_pipeline(C=1.0)
+        with threadpool_limits(limits=2):
+            fitted.fit(self.vectors, self.truth)
+        result = _refit_and_compare(ModelScorer(fitted), self.vectors, self.truth,
+                                    list(range(len(self.truth))), {"metrics": {"C": 1.0}})
+        self.assertIn("scale.mean_", result["parameter_differences"])
+        self.assertIn("logreg.coef_", result["parameter_differences"])
+        self.assertEqual(result["prediction_max_abs_difference"], 0.0)
+        self.assertEqual(result["training_iterations"][0]["status"], "converged")
+
+    def test_verifier_reproduces_nested_vote_and_forest(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from verify_training import _refit_and_compare
+        from m5_estimators import build_estimator
+        from threadpoolctl import threadpool_limits
+
+        configurations = [
+            {"family": "extra_trees", "n_estimators": 8,
+             "min_samples_leaf": 2, "max_features": 0.7},
+            {"family": "soft_vote", "logreg_C": 1.0,
+             "hgb": {key: value for key, value in self.config.items() if key != "family"},
+             "weights": [1.0, 2.0]},
+        ]
+        for config in configurations:
+            with self.subTest(family=config["family"]):
+                fitted = build_estimator(config)
+                with threadpool_limits(limits=2):
+                    fitted.fit(self.vectors, self.truth)
+                model = ModelScorer(fitted, metadata={"estimator_config": config})
+                result = _refit_and_compare(model, self.vectors, self.truth,
+                                            list(range(len(self.truth))), {"metrics": {}})
+                self.assertLessEqual(result["prediction_max_abs_difference"], 1e-12)
+                self.assertTrue(all(value == 0.0 for value in result["parameter_differences"].values()))
+
+
 class TestDatasetProvenance(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -1,7 +1,7 @@
 """Verify the shipped classifier against its exact training rows and holdout.
 
 Run after M0 and M5: python scripts/verify_training.py
-Refits once at the already selected C, checks the saved coefficients/scaler,
+Refits the recorded estimator recipe, checks fitted state and predictions,
 and compares combined training with a MAGE-only fit on the same heldout rows.
 Neither this comparison nor the holdout chooses any training hyperparameter.
 """
@@ -25,6 +25,123 @@ from m5_scorer import (  # noqa: E402
     dataset_metadata, dataset_sha256, load_dataset, load_dataset_rows,
 )
 import pipeline  # noqa: E402
+
+
+def _iteration_details(estimator, prefix: str = "model") -> list[dict]:
+    """Check completion using each classifier's actual training controls."""
+    from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, VotingClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+
+    if isinstance(estimator, Pipeline):
+        return [record for name, step in estimator.steps
+                for record in _iteration_details(step, f"{prefix}.{name}")]
+    if isinstance(estimator, VotingClassifier):
+        return [record for name, step in estimator.named_estimators_.items()
+                for record in _iteration_details(step, f"{prefix}.{name}")]
+    if isinstance(estimator, LogisticRegression):
+        iterations = int(estimator.n_iter_.max())
+        if iterations >= estimator.max_iter:
+            raise ValueError("saved classifier reached its iteration limit; retrain to convergence")
+        return [{"estimator": prefix, "kind": "logistic_regression",
+                 "iterations": iterations, "max_iterations": estimator.max_iter,
+                 "status": "converged"}]
+    if isinstance(estimator, HistGradientBoostingClassifier):
+        if estimator.early_stopping is not False:
+            raise ValueError("verified boosting must disable internal early-stopping validation")
+        if estimator.n_iter_ != estimator.max_iter:
+            raise ValueError("boosting did not complete its recorded fixed iteration budget")
+        return [{"estimator": prefix, "kind": "hist_gradient_boosting",
+                 "iterations": int(estimator.n_iter_), "max_iterations": estimator.max_iter,
+                 "status": "fixed_budget_completed", "early_stopping": False}]
+    if isinstance(estimator, ExtraTreesClassifier):
+        if len(estimator.estimators_) != estimator.n_estimators:
+            raise ValueError("tree ensemble did not complete its recorded tree budget")
+        return [{"estimator": prefix, "kind": "extra_trees",
+                 "trees": len(estimator.estimators_), "status": "fixed_budget_completed"}]
+    return []
+
+
+def _fitted_differences(saved, fresh, prefix: str = "") -> dict:
+    """Compare linear parameters or the complete fitted trees of supported recipes."""
+    from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, VotingClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    differences = {}
+    def compare(name, left, right):
+        left, right = np.asarray(left), np.asarray(right)
+        if left.shape != right.shape:
+            raise ValueError(f"saved fitted state changed shape: {prefix}{name}")
+        if left.dtype.names or left.dtype.kind not in "fciub":
+            if not np.array_equal(left, right):
+                raise ValueError(f"saved fitted state does not reproduce: {prefix}{name}")
+            return 0.0
+        difference = float(np.max(np.abs(left.astype(float) - right.astype(float)))) if left.size else 0.0
+        if not np.allclose(left, right, rtol=1e-9, atol=1e-10):
+            raise ValueError(f"saved fitted state does not reproduce: {prefix}{name}")
+        return difference
+
+    if isinstance(saved, Pipeline):
+        for name, step in saved.steps:
+            differences.update(_fitted_differences(step, fresh.named_steps[name], f"{prefix}{name}."))
+    elif isinstance(saved, VotingClassifier):
+        for name, step in saved.named_estimators_.items():
+            differences.update(_fitted_differences(step, fresh.named_estimators_[name], f"{prefix}{name}."))
+    elif isinstance(saved, (StandardScaler, LogisticRegression)):
+        attributes = ("mean_", "scale_") if isinstance(saved, StandardScaler) else ("coef_", "intercept_")
+        for attribute in attributes:
+            differences[f"{prefix}{attribute}"] = compare(attribute, getattr(saved, attribute), getattr(fresh, attribute))
+    elif isinstance(saved, HistGradientBoostingClassifier):
+        differences[f"{prefix}baseline_prediction"] = compare(
+            "baseline_prediction", saved._baseline_prediction, fresh._baseline_prediction)
+        if len(saved._predictors) != len(fresh._predictors):
+            raise ValueError("boosting tree count differs after refitting")
+        for attribute in ("nodes", "binned_left_cat_bitsets", "raw_left_cat_bitsets"):
+            values = []
+            for left_stage, right_stage in zip(saved._predictors, fresh._predictors):
+                if len(left_stage) != len(right_stage):
+                    raise ValueError("boosting class tree count differs after refitting")
+                values.extend(compare(attribute, getattr(left, attribute), getattr(right, attribute))
+                              for left, right in zip(left_stage, right_stage))
+            differences[f"{prefix}{attribute}"] = max(values, default=0.0)
+        differences[f"{prefix}bin_thresholds"] = max(
+            (compare("bin_thresholds", left, right) for left, right in
+             zip(saved._bin_mapper.bin_thresholds_, fresh._bin_mapper.bin_thresholds_)), default=0.0)
+    elif isinstance(saved, ExtraTreesClassifier):
+        if len(saved.estimators_) != len(fresh.estimators_):
+            raise ValueError("ensemble tree count differs after refitting")
+        for attribute in ("nodes", "values"):
+            differences[f"{prefix}tree_{attribute}"] = max(
+                (compare(attribute, left.tree_.__getstate__()[attribute], right.tree_.__getstate__()[attribute])
+                 for left, right in zip(saved.estimators_, fresh.estimators_)), default=0.0)
+    else:
+        raise ValueError(f"no fitted-state verification for {type(saved).__name__}")
+    return differences
+
+
+def _refit_and_compare(model, vectors, labels, train_indices, report: dict) -> dict:
+    """Refit on saved training indices and compare state plus all supplied predictions."""
+    from threadpoolctl import threadpool_limits
+
+    config = model.metadata.get("estimator_config")
+    if config is None:
+        refitted = ModelScorer._build_pipeline(C=report["metrics"]["C"])
+    else:
+        from m5_estimators import build_estimator
+        refitted = build_estimator(config)
+    details = _iteration_details(model.pipeline)
+    with threadpool_limits(limits=2):
+        refitted.fit(vectors[train_indices], labels[train_indices])
+        differences = _fitted_differences(model.pipeline, refitted)
+        saved_probabilities = model.pipeline.predict_proba(vectors)
+        fresh_probabilities = refitted.predict_proba(vectors)
+    difference = float(np.max(np.abs(saved_probabilities - fresh_probabilities)))
+    if not np.allclose(saved_probabilities, fresh_probabilities, rtol=1e-12, atol=1e-12):
+        raise ValueError("saved model predictions do not reproduce after refitting")
+    return {"parameter_differences": differences, "training_iterations": details,
+            "prediction_max_abs_difference": difference}
 
 
 def verify() -> dict:
@@ -66,20 +183,7 @@ def verify() -> dict:
     by_id = {row["id"]: i for i, row in enumerate(rows)}
     train = [by_id[row_id] for row_id in model.metadata["train_ids"]]
     test = [by_id[row["id"]] for row in heldout]
-    C = report["metrics"]["C"]
-    classifier = model.pipeline.named_steps["logreg"]
-    if int(classifier.n_iter_.max()) >= classifier.max_iter:
-        raise ValueError("saved classifier reached its iteration limit; retrain to convergence")
-    refitted = ModelScorer._build_pipeline(C=C)
-    refitted.fit(X[train], y[train])
-    differences = {}
-    for step, attribute in (("scale", "mean_"), ("scale", "scale_"),
-                            ("logreg", "coef_"), ("logreg", "intercept_")):
-        saved = getattr(model.pipeline.named_steps[step], attribute)
-        fresh = getattr(refitted.named_steps[step], attribute)
-        differences[f"{step}.{attribute}"] = float(np.max(np.abs(saved - fresh)))
-        if not np.allclose(saved, fresh, rtol=1e-9, atol=1e-10):
-            raise ValueError(f"saved parameters do not reproduce: {step}.{attribute}")
+    refit = _refit_and_compare(model, X, y, train, report)
 
     combined_probs = model.pipeline.predict_proba(X[test])[:, 1]
     combined = _classification_metrics([labels[i] for i in test], combined_probs)
@@ -120,14 +224,15 @@ def verify() -> dict:
         "checks": {"finite_features": True, "exact_duplicates": 0,
                    "shared_prefixes_across_groups": 0, "train_test_group_overlap": 0,
                    "per_domain_class_and_length_balance": True,
-                   "model_report_metrics_match": True, "solver_converged": True},
-        "solver_iterations": int(classifier.n_iter_.max()),
-        "solver_max_iterations": classifier.max_iter,
-        "refit_parameter_max_abs_differences": differences,
+                   "model_report_metrics_match": True, "training_controls_completed": True},
+        "training_iteration_details": refit["training_iterations"],
+        "refit_parameter_max_abs_differences": refit["parameter_differences"],
+        "refit_prediction_max_abs_difference": refit["prediction_max_abs_difference"],
         "same_holdout_comparison": comparison,
         "comparison_note": "MAGE-only comparison refits C=30 on MAGE rows in the final "
-                           "training partition; combined model uses training-only CV to "
-                           "choose C. Both score identical final heldout rows. This is "
+                           "training partition. The combined model's recipe was selected "
+                           "using training-only grouped CV. Both score identical final "
+                           "heldout rows; this diagnostic never selects a model. This is "
                            "an internal corpus comparison, not an external benchmark.",
     }
 
