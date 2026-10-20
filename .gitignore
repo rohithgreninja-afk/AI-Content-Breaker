@@ -27,3 +27,9 @@ Thumbs.db
 # Cursor IDE
 .cursor/
 .cursorrules
+
+# React development and builds
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
