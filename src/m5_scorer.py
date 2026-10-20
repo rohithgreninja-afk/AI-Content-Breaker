@@ -57,63 +57,51 @@ HUMAN_LABEL = "human"
 #   direction "low":  fires when value <= threshold (feature is lower in AI)
 #
 # Each threshold is the cut point that maximised lift (AI hit rate minus human
-# hit rate) on the 760-row sample, subject to firing on 15-95% of AI rows so
-# no rule is a near-constant. Weights follow the measured lift in tiers:
-# >=0.30 -> 1.6, >=0.25 -> 1.4, >=0.20 -> 1.2, >=0.15 -> 0.9, >=0.10 -> 0.7,
-# below that -> 0.4.
+# hit rate) on the TRAINING split of the MAGE sample (3550 rows), subject to
+# firing on 15-95% of AI rows so no rule is a near-constant. Weights follow
+# the measured lift in tiers: >=0.30 -> 1.6, >=0.25 -> 1.4, >=0.20 -> 1.2,
+# >=0.15 -> 0.9, >=0.10 -> 0.7, below that -> 0.4. Rules under 0.05 lift are
+# dropped. Fitting on train only keeps the held-out figure honest.
 #
-# Because these were fitted on the whole sample, rule accuracy measured on the
-# same rows is in-sample and optimistic; the CLI reports a held-out figure on
-# the same split M5b uses. Rerun `--audit` after changing the dataset: a rule
-# whose lift has collapsed has stopped earning its weight.
+# On MAGE every surviving rule lands in the lowest tier (best lift 0.09): no
+# single stylometric feature separates human from machine text across 10
+# domains and 27 generators. The earlier RAID-tuned rules (lifts up to 0.35)
+# were mostly measuring that all RAID humans wrote 96+ word abstracts. M5a is
+# kept for inspectability, not accuracy (held-out 0.531); M5b carries the
+# verdict.
 #
-# Two candidate rules were dropped rather than retuned. tpl_topic_sentence_rate
-# and lex_transition_rate both came out with their best cut in the *opposite*
-# direction to the hypothesis (AI using more topic sentences and connectives),
-# at lift <= 0.10. Flipping a rule to chase a sign with no story behind it is
-# curve-fitting, so they are out.
+# Dropped on MAGE (lift < 0.05 or no valid cut): sent_cv_len, punct_dash_rate,
+# punct_paren_open_rate, tpl_struct_complex_rate, lex_long_word_rate,
+# pos_content_rate, pos_noun_rate, lex_booster_rate,
+# tpl_nominalization_chain_rate.
 RULES: tuple[tuple[str, str, float, float], ...] = (
     # Vocabulary reuse: AI repeats less in the mid-frequency band and spaces
-    # its repeats far more evenly.
-    ("rep_dis_rate", "low", 0.1184, 1.6),
-    ("rep_stdev_repeat_gap_log", "low", 3.2637, 1.6),
-    # Pacing: uniform sentence lengths are the single clearest machine tell.
-    ("sent_cv_len", "low", 0.2314, 1.6),
-    # Punctuation: humans reach for dashes, commas and parentheses far more.
-    ("punct_dash_rate", "low", 0.0108, 1.6),
-    ("pos_punct_rate", "low", 0.0958, 1.4),
-    ("punct_comma_rate", "low", 0.0242, 1.2),
-    ("punct_paren_open_rate", "low", 0.0035, 1.2),
+    # its repeats more evenly.
+    ("rep_dis_rate", "low", 0.1061, 0.4),
+    ("rep_stdev_repeat_gap_log", "low", 2.9202, 0.4),
+    # Punctuation: humans use more commas and punctuation overall.
+    ("pos_punct_rate", "low", 0.0826, 0.4),
+    ("punct_comma_rate", "low", 0.0338, 0.4),
     # Structure: AI prose nests deeper and builds bigger, bushier trees.
-    ("parse_mean_depth", "high", 9.2361, 1.4),
-    ("parse_mean_branching", "high", 1.7335, 1.4),
-    ("parse_mean_nodes", "high", 25.4773, 1.2),
-    ("tpl_struct_complex_rate", "high", 0.1484, 0.9),
-    ("parse_mean_subordinate", "high", 0.3038, 0.7),
-    # Register: longer words, denser content, more nouns and verbs.
-    ("lex_long_word_rate", "high", 0.4165, 1.2),
-    ("pos_verb_rate", "high", 0.1435, 0.9),
-    ("pos_content_rate", "high", 0.6256, 0.9),
-    ("pos_noun_rate", "high", 0.3070, 0.9),
-    # Boilerplate: weak as binary rules, kept at low weight because the
-    # direction is consistent and theoretically motivated.
-    ("lex_booster_rate", "high", 0.0068, 0.4),
-    ("tpl_nominalization_chain_rate", "high", 0.0119, 0.4),
+    ("parse_mean_depth", "high", 5.7273, 0.4),
+    ("parse_mean_branching", "high", 1.0514, 0.4),
+    ("parse_mean_nodes", "high", 15.0625, 0.4),
+    ("parse_mean_subordinate", "high", 0.2083, 0.4),
+    # Register: more verbs.
+    ("pos_verb_rate", "high", 0.1697, 0.4),
 )
 
 # Logistic squashing of the signed rule total.
 #
-# RULE_BIAS shifts the decision point, so it does set accuracy. It has to be
-# positive: a text has to fire more than half the total weight to clear a
-# zero-bias cutoff, and most texts fire fewer rules than that, which left the
-# signed total negative for *both* classes (mean score human 0.08, ai 0.42)
-# and the scorer predicting "human" far too often (recall 0.41). At +4.5 the
-# boundary sits between the classes: accuracy 0.705 -> 0.774, recall -> 0.63.
+# RULE_BIAS shifts the decision point, so it does set accuracy. On MAGE the
+# train-split grid picks 0.0: the rules fire about as often as not, so the
+# signed total is already centred. (The RAID-era +4.5 made "no evidence" read
+# as AI, which is half of why short text scored as AI.)
 #
 # RULE_SCALE only sets how fast the score moves away from 0.5, so it cannot
 # change the predicted labels; it is a calibration knob, chosen on Brier.
 # Both come from calibrate_rules(); see --audit to re-derive them.
-RULE_BIAS = 4.5
+RULE_BIAS = 0.0
 RULE_SCALE = 0.20
 
 
