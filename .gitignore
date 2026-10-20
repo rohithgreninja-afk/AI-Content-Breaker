@@ -7,6 +7,7 @@ __pycache__/
 
 # Project data & model artifacts (regenerated locally; RAID subset not redistributed)
 data/*.csv
+data/*.jsonl
 models/
 
 # nltk downloaded data if placed in-repo

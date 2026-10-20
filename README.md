@@ -20,19 +20,30 @@ Python 3.14 in `.venv` at the repo root. Install deps with the venv interpreter:
 
 ## Current status
 
-M0–M5 are in place, with 112 tests passing. On the 760-row RAID sample
-(400 human / 360 AI):
+M0–M5 are in place, with 112 tests passing. Training data is a balanced,
+length-matched sample of [MAGE](https://huggingface.co/datasets/yaful/MAGE):
+4734 rows (2367 human / 2367 AI), 10 domains (Reddit CMV, Yelp, XSum, TLDR,
+ELI5, WritingPrompts, ROCStories, HellaSwag, SQuAD, SciGen), 27 generators
+(GPT-3.5, davinci-002/003, LLaMA 7B-65B, GLM-130B, OPT, Flan-T5, ...).
+Within each domain the classes have equal counts and identical lengths.
+
+Held-out split (1184 rows; texts under 50 words abstain, 752 scored):
 
 | scorer | accuracy | notes |
 |---|---|---|
-| M5a rule-based | 0.816 held-out | 18 thresholded rules, fully inspectable |
-| M5b logistic regression | 0.847 test | ROC-AUC 0.941, 5-fold CV 0.867 ± 0.031 |
+| M5a rule-based | 0.561 | 9 thresholded rules, fully inspectable |
+| M5b logistic regression | 0.689 | all 1184 rows: 0.634, ROC-AUC 0.687, CV 0.653 ± 0.015 |
+
+M5b accuracy rises with length: 0.54 at 20-50 words, 0.64 at 50-100, 0.70
+at 100-200, 0.77 at 200-300. The earlier RAID figures (0.816 / 0.847) came
+from one domain (abstracts) where every human text was 96+ words, so length
+alone predicted the label; they are not comparable.
 
 ## Pipeline
 
 | module | does | public entry point |
 |---|---|---|
-| `m0_dataset.py` | streams + balances RAID into CSV | `main()` |
+| `m0_dataset.py` | samples + balances MAGE into CSV | `main()` |
 | `m1_lexer.py` | maximal-munch lexer | `tokenize(text)` |
 | `m2_symtab.py` | symbol table over the token stream | `build_symtab(tokens)` |
 | `m3_parser.py` | recursive-descent CFG **and** template DFA | `parse_text(text)` |
@@ -43,7 +54,7 @@ M0–M5 are in place, with 112 tests passing. On the 760-row RAID sample
 ## Running it
 
 ```
-.venv\Scripts\python.exe src\m0_dataset.py          # regenerate data/raid_clean.csv
+.venv\Scripts\python.exe src\m0_dataset.py          # regenerate data/mage_clean.csv (MAGE sample)
 .venv\Scripts\python.exe src\m5_scorer.py --train   # fit, report, save the model
 .venv\Scripts\python.exe src\m5_scorer.py --score path\to\text.txt
 .venv\Scripts\python.exe src\m5_scorer.py --audit   # per-rule lift, for tuning
@@ -64,5 +75,5 @@ pipeline still runs offline.
 - `src/` — pipeline modules (`m0_dataset.py` … `m5_scorer.py`)
 - `tests/` — smoke tests per module (run any file directly)
 - `scripts/` — exploratory RAID probes (`pull_raid.py`, etc.)
-- `data/` — generated `raid_clean.csv` (gitignored, not redistributed)
+- `data/` — generated `mage_clean.csv` and the `mage_pool.jsonl` fetch cache (gitignored)
 - `models/` — trained classifier artifacts (gitignored, not committed; regenerate with `.venv\Scripts\python.exe src\m5_scorer.py --train`)

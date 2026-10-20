@@ -216,6 +216,35 @@
 - Run: `.venv\Scripts\python.exe src\m5_scorer.py --train`
 - Run tests: `.venv\Scripts\python.exe tests\test_m5_scorer.py`
 
+## Dataset switch: RAID -> MAGE (done)
+- **Why:** the RAID sample was 100% scientific abstracts from 6 older
+  models, and every human row was 96+ words. A length-only tree scored 0.80,
+  so the reported 0.816 / 0.847 mostly measured length and genre.
+- **Source:** `yaful/MAGE` (pinned revision 342663f0), train split, 319k rows.
+  The CDN served ~22 KB/s here, so M0 samples through the HF datasets-server
+  rows API: 200 blocks of 100 rows at seeded random offsets, 1 s apart with
+  backoff on 429/502, cached and resumable in `data/mage_pool.jsonl`
+  (19,187 rows). The `/filter` endpoint never finished loading its index.
+- **Balancing:** per domain, equal human/AI counts (max 300 pairs); each
+  human row is paired with an AI row and both are cut to the shorter length
+  (20-300 words). Human and AI length distributions are identical (median
+  67). Result: 4734 rows, 10 domains, 27 generators. MAGE labels (1 = human)
+  are mapped to the human/ai contract; LLaMA rows (tagged by size) are named
+  `llama_<size>`.
+- **M5a re-derived** on the train split only (it was fitted on all RAID rows
+  before): 9 of 18 rules survive, all at weight 0.4 (best lift 0.09);
+  RULE_BIAS 4.5 -> 0.0. Held-out 0.523 (RAID rules) -> 0.531.
+- **M5b retrained** (C=30 still best by CV): test 0.634, AUC 0.687, CV
+  0.653 +- 0.015. By length: 0.54 / 0.64 / 0.70 / 0.77 at 20-50 / 50-100 /
+  100-200 / 200-300 words. Hardest generators: llama_65B (recall 0.14),
+  text-davinci-003 (0.39), gpt-3.5 (0.43). HistGradientBoosting on the same
+  features reaches 0.702 (not adopted; logistic regression is the spec).
+- `--eval`: 432 of 1184 test rows abstain (under 50 words); on the other 752
+  M5a 0.561, M5b 0.689.
+- **Reading the numbers:** these features are lexical/syntactic only (no
+  language model), and MAGE spans genres and modern LLMs, so ~0.65-0.70 is
+  the honest ceiling for this design, not a regression.
+
 ## Short-text abstain gate (pipeline, done)
 - **Bug:** short text was called AI. Root cause: every human training row is
   96+ words (all RAID abstracts), and 7 M5a "low" rules fire when their
