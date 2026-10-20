@@ -102,6 +102,13 @@ training set. Those historical row-split figures are not directly comparable
 to the new grouped evaluation. See `reports/mage_audit.json` for the evidence.
 
 Current training results are recorded in `models/training_report.json`.
+The grouped split contains 5,580 training texts and 1,910 held-out texts.
+Training-only CV selected **C = 10** (accuracy **0.672 ± 0.019**). M5b scores
+**68.6% accuracy / 0.755 ROC-AUC** on every held-out row, and **73.4% accuracy**
+on the 1,354 rows passing the 50-word gate (**70.9% coverage**, 556 abstentions).
+Gated accuracy varies by source: HC3 84.8%, MAGE 68.5%, Wiki 66.2%, and RAID
+58.5%; RAID has only 53 scored test rows. These are internal sample results.
+
 `scripts/verify_training.py` checks the dataset, related-text groups, class
 and length balance, and finite features, then reproduces the saved model's
 scaler and coefficients. It also compares combined and MAGE-only training
