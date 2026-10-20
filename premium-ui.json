@@ -1,0 +1,12 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["frontend"],
+  "locale": "en-IN",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Form", "Scrollbar"],
+  "commands": {
+    "build": "npm run build",
+    "backend": ".venv/Scripts/python.exe -m unittest discover -s tests"
+  },
+  "requiredCommands": ["build", "backend"]
+}
