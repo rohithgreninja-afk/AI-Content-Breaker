@@ -40,7 +40,7 @@ from m4_features import (  # noqa: E402
 )
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_PATH = os.path.join(REPO_ROOT, "data", "mage_clean.csv")
+DATA_PATH = os.path.join(REPO_ROOT, "data", "train_clean.csv")
 MODEL_PATH = os.path.join(REPO_ROOT, "models", "m5_logreg.joblib")
 
 # Label convention, fixed for both scorers: 1 = machine-generated.
@@ -584,7 +584,7 @@ def _print_model_report(features: list[dict], labels: list[str],
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Report both scorers on the MAGE sample; see module docstring for flags."""
+    """Report both scorers on the training sample; see module docstring for flags."""
     argv = list(sys.argv[1:] if argv is None else argv)
 
     if "--score" in argv:

@@ -1,119 +1,69 @@
-"""M0: build a balanced clean MAGE subset at data/mage_clean.csv.
+"""M0: build a balanced, length-matched training set at data/train_clean.csv.
 
-MAGE (yaful/MAGE, Li et al. 2024) pairs human text from 10 sources (Reddit
-CMV, Yelp, XSum news, TLDR, ELI5, WritingPrompts, ROCStories, HellaSwag,
-SQuAD, SciGen) with machine text from 27 LLMs. That breadth is the point: the
-earlier RAID pull was 100% scientific abstracts from 6 older models, and every
-human row was 96+ words, so the scorers learned "short or not an abstract =
-AI".
+Four public human-vs-machine datasets, each sampled and balanced the same way:
 
-The full train.csv is 400 MB and the HF CDN is slow from some networks, so
-this samples through the HF datasets-server rows API instead: blocks of rows
-at seeded random offsets across the whole split, cached to
-data/mage_pool.jsonl, then balanced per (domain, label). The dataset revision
-is pinned so a rebuild gives the same rows.
+    mage  yaful/MAGE                  10 domains (Reddit CMV, Yelp, XSum, TLDR,
+                                      ELI5, WritingPrompts, ROCStories,
+                                      HellaSwag, SQuAD, SciGen), 27 LLMs
+    hc3   Hello-SimpleAI/HC3          human vs ChatGPT answers to the same
+                                      questions (ELI5, open QA, CS wiki,
+                                      medicine, finance)
+    wiki  aadityaubhat/GPT-wiki-intro Wikipedia intros vs GPT-3 (curie)
+                                      intros for the same article
+    raid  liamdugan/raid              8 domains (abstracts, books, news,
+                                      poetry, recipes, reddit, reviews, wiki),
+                                      11 generators incl. GPT-4 and ChatGPT;
+                                      unattacked rows only
+
+Breadth is the point. The first RAID pull read only the start of a sorted
+file, so it was 100% scientific abstracts with every human row 96+ words,
+and the scorers learned "short or not an abstract = AI".
+
+Full downloads are hundreds of MB and the HF CDN is slow from some networks,
+so every source is sampled through the HF datasets-server rows API: blocks of
+rows at seeded random offsets across the whole split, cached and resumable in
+data/<source>_pool.jsonl. Revisions are pinned below and checked at start.
+
+Balancing, per (source, domain): equal human and AI counts (at most PER_CELL
+pairs), and each human text is paired with an AI text and both are cut to the
+shorter length, so neither domain nor length can stand in for the label.
 
 Frozen CSV contract: id, model, label, domain, text  (label in {human, ai}).
-MAGE's own labels are 1 = human, 0 = machine; they are mapped here.
+The domain column is "<source>:<domain>", e.g. "hc3:finance".
 """
 
 from __future__ import annotations
 
+import ast
 import csv
 import json
 import os
 import random
+import sys
 import time
 from collections import Counter
 
 import requests
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(REPO_ROOT, "data", "mage_clean.csv")
-POOL = os.path.join(REPO_ROOT, "data", "mage_pool.jsonl")
+DATA_DIR = os.path.join(REPO_ROOT, "data")
+OUT = os.path.join(DATA_DIR, "train_clean.csv")
 
-DATASET = "yaful/MAGE"
-# Pinned commit of yaful/MAGE; the rows API serves the current revision, so
-# the pool records it and main() warns if the hub has moved on.
-REVISION = "342663f0a2b775455c023f5d36a1341ff0ec5402"
-SPLIT = "train"
 ROWS_API = "https://datasets-server.huggingface.co/rows"
-INFO_API = f"https://huggingface.co/api/datasets/{DATASET}"
+INFO_API = "https://huggingface.co/api/datasets/"
 
-N_BLOCKS = 200        # random offsets to read
 BLOCK_LEN = 100       # rows per offset (the API maximum)
 REQUEST_GAP = 1.0     # seconds between requests; the API rate-limits (429)
-PER_CELL = 300        # rows kept per (domain, label), at most
+PER_CELL = 300        # human/AI pairs kept per (source, domain), at most
 MIN_WORDS = 20        # drop fragments; MIN_WORDS in pipeline gates at 50
 MAX_WORDS = 300       # longer texts are cut to this many words
 SEED = 42
 LLAMA_SIZES = {"7B", "13B", "30B", "65B"}
 
 
-def _fetch_block(offset: int) -> list[dict]:
-    """One block of rows from the datasets-server API, with retries."""
-    params = {"dataset": DATASET, "config": "default", "split": SPLIT,
-              "offset": offset, "length": BLOCK_LEN}
-    for attempt in range(8):
-        try:
-            response = requests.get(ROWS_API, params=params, timeout=60)
-            if response.status_code == 200:
-                return [
-                    {"row_idx": item["row_idx"], **item["row"]}
-                    for item in response.json().get("rows", [])
-                ]
-            status = response.status_code
-        except requests.RequestException as error:
-            status = type(error).__name__
-        # 429 means slow down; back off hard rather than hammer the API.
-        wait = min(15 * 2 ** attempt, 300)
-        print(f"  offset {offset}: {status}, retrying in {wait}s", flush=True)
-        time.sleep(wait)
-    raise RuntimeError(f"rows API kept failing at offset {offset}")
-
-
-def _num_rows() -> int:
-    """Rows in the split, from the rows API's own count."""
-    params = {"dataset": DATASET, "config": "default", "split": SPLIT,
-              "offset": 0, "length": 1}
-    response = requests.get(ROWS_API, params=params, timeout=60)
-    response.raise_for_status()
-    return int(response.json()["num_rows_total"])
-
-
-def fetch_pool() -> list[dict]:
-    """Read N_BLOCKS blocks at seeded random offsets into POOL.
-
-    POOL is appended block by block, so an interrupted run resumes where it
-    stopped instead of re-reading everything.
-    """
-    rows: list[dict] = []
-    if os.path.exists(POOL):
-        with open(POOL, encoding="utf-8") as handle:
-            rows = [json.loads(line) for line in handle]
-    have = {row["row_idx"] for row in rows}
-
-    total = _num_rows()
-    rng = random.Random(SEED)
-    offsets = sorted(rng.sample(range(0, total - BLOCK_LEN), N_BLOCKS))
-    todo = [offset for offset in offsets if offset not in have]
-    if todo:
-        print(f"fetching {len(todo)} of {N_BLOCKS} blocks of {BLOCK_LEN} "
-              f"from {total} rows ...", flush=True)
-    os.makedirs(os.path.dirname(POOL), exist_ok=True)
-    with open(POOL, "a", encoding="utf-8") as handle:
-        for i, offset in enumerate(todo, 1):
-            for row in _fetch_block(offset):
-                if row["row_idx"] not in have:  # blocks can overlap
-                    have.add(row["row_idx"])
-                    rows.append(row)
-                    handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-            handle.flush()
-            if i % 20 == 0:
-                print(f"  {i}/{len(todo)} blocks, {len(rows)} rows", flush=True)
-            time.sleep(REQUEST_GAP)
-    return rows
-
+# --------------------------------------------------------------------------
+# Per-source row mappers: one API row -> list of (label, model, domain, text)
+# --------------------------------------------------------------------------
 
 def parse_src(src: str) -> tuple[str, str]:
     """Split a MAGE src tag into (domain, model).
@@ -134,6 +84,149 @@ def parse_src(src: str) -> tuple[str, str]:
     return domain, model
 
 
+def map_mage(row: dict) -> list[tuple]:
+    """MAGE labels are 1 = human, 0 = machine."""
+    domain, model = parse_src(row["src"])
+    label = "human" if int(row["label"]) == 1 else "ai"
+    return [(label, model, domain, row["text"])]
+
+
+def _first(answers) -> str | None:
+    """First answer of an HC3 answer list (sometimes served as a string)."""
+    if isinstance(answers, str):
+        try:
+            answers = ast.literal_eval(answers)
+        except (ValueError, SyntaxError):
+            return answers or None
+    return answers[0] if answers else None
+
+
+def map_hc3(row: dict) -> list[tuple]:
+    """One question gives a human answer and a ChatGPT answer."""
+    out = []
+    human = _first(row.get("human_answers"))
+    machine = _first(row.get("chatgpt_answers"))
+    if human:
+        out.append(("human", "human", row["source"], human))
+    if machine:
+        out.append(("ai", "chatgpt", row["source"], machine))
+    return out
+
+
+def map_wiki(row: dict) -> list[tuple]:
+    """One article gives the real intro and a GPT-3 curie intro."""
+    return [("human", "human", "wikipedia", row["wiki_intro"]),
+            ("ai", "gpt3_curie", "wikipedia", row["generated_intro"])]
+
+
+def map_raid(row: dict) -> list[tuple]:
+    """Unattacked RAID rows only; model "human" marks human text."""
+    if row.get("attack") != "none" or not row.get("generation"):
+        return []
+    label = "human" if row["model"] == "human" else "ai"
+    return [(label, row["model"], row["domain"], row["generation"])]
+
+
+# name -> dataset, config, split, pinned revision, blocks to read, mapper
+SOURCES = {
+    "mage": ("yaful/MAGE", "default", "train",
+             "342663f0a2b775455c023f5d36a1341ff0ec5402", 200, map_mage),
+    "hc3": ("Hello-SimpleAI/HC3", "all", "train",
+            "4d0ff18143b5a7e1b1e79beb540c04549d1e59d3", 40, map_hc3),
+    "wiki": ("aadityaubhat/GPT-wiki-intro", "default", "train",
+             "017258d41991489752363bfa4cbcc12725786967", 20, map_wiki),
+    # RAID is 2.27M rows, about 1 in 12 unattacked, so it needs more blocks.
+    "raid": ("liamdugan/raid", "raid", "train",
+             "865cac74188466cb0c3b7574a10204007b57a459", 300, map_raid),
+}
+
+
+# --------------------------------------------------------------------------
+# Fetching
+# --------------------------------------------------------------------------
+
+def _get_rows(dataset: str, config: str, split: str, offset: int,
+              length: int) -> dict:
+    """One rows-API call, with backoff on rate limits and server errors."""
+    params = {"dataset": dataset, "config": config, "split": split,
+              "offset": offset, "length": length}
+    for attempt in range(8):
+        try:
+            response = requests.get(ROWS_API, params=params, timeout=90)
+            if response.status_code == 200:
+                return response.json()
+            status = response.status_code
+        except requests.RequestException as error:
+            status = type(error).__name__
+        # 429 means slow down; back off hard rather than hammer the API.
+        wait = min(15 * 2 ** attempt, 300)
+        print(f"  {dataset} offset {offset}: {status}, retrying in {wait}s",
+              flush=True)
+        time.sleep(wait)
+    raise RuntimeError(f"rows API kept failing: {dataset} offset {offset}")
+
+
+def check_revision(name: str) -> None:
+    """Warn when the hub has moved past the pinned revision.
+
+    The rows API always serves the live revision, so a moved dataset can
+    change the sample even with the same seed.
+    """
+    dataset, _, _, revision, _, _ = SOURCES[name]
+    try:
+        live = requests.get(INFO_API + dataset, timeout=30).json().get("sha")
+    except requests.RequestException:
+        return
+    if live and live != revision:
+        print(f"warning: {dataset} is now at {live}, pinned {revision}",
+              flush=True)
+
+
+def fetch_pool(name: str) -> list[dict]:
+    """Read one source's blocks at seeded random offsets into its pool file.
+
+    The pool is appended block by block, so an interrupted run resumes where
+    it stopped instead of re-reading everything.
+    """
+    dataset, config, split, _, n_blocks, _ = SOURCES[name]
+    path = os.path.join(DATA_DIR, f"{name}_pool.jsonl")
+    rows: list[dict] = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as handle:
+            rows = [json.loads(line) for line in handle]
+    have = {row["row_idx"] for row in rows}
+
+    total = int(_get_rows(dataset, config, split, 0, 1)["num_rows_total"])
+    # Same seed for every source: offsets differ anyway because the sizes do,
+    # and it keeps the original MAGE pool's offsets valid.
+    rng = random.Random(SEED)
+    offsets = sorted(rng.sample(range(0, total - BLOCK_LEN), n_blocks))
+    todo = [offset for offset in offsets if offset not in have]
+    if todo:
+        print(f"{name}: fetching {len(todo)} of {n_blocks} blocks from "
+              f"{total} rows ...", flush=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        for i, offset in enumerate(todo, 1):
+            page = _get_rows(dataset, config, split, offset, BLOCK_LEN)
+            for item in page.get("rows", []):
+                if item["row_idx"] not in have:  # blocks can overlap
+                    have.add(item["row_idx"])
+                    row = {"row_idx": item["row_idx"], **item["row"]}
+                    rows.append(row)
+                    handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            handle.flush()
+            if i % 20 == 0:
+                print(f"  {name}: {i}/{len(todo)} blocks, {len(rows)} rows",
+                      flush=True)
+            time.sleep(REQUEST_GAP)
+    return rows
+
+
+# --------------------------------------------------------------------------
+# Cleaning and balancing
+# --------------------------------------------------------------------------
+
 def is_clean(text: str) -> bool:
     """Keep real prose: at least MIN_WORDS words, mostly letters."""
     if len(text.split()) < MIN_WORDS:
@@ -147,25 +240,26 @@ def _cut(row: list, n_words: int) -> list:
     return row[:4] + [" ".join(row[4].split()[:n_words])]
 
 
-def collect(pool: list[dict]) -> list[list]:
-    """Balance and length-match the pool, domain by domain.
+def collect(name: str, pool: list[dict]) -> list[list]:
+    """Balance and length-match one source's pool, domain by domain.
 
     Within each domain the classes get equal counts (so the domain says
     nothing about the label), and each human row is paired with an AI row
     and both are cut to the shorter of the two (so length says nothing about
-    the label either). That was the RAID failure: every short text was AI.
+    the label either).
     """
+    mapper = SOURCES[name][5]
     cells: dict[tuple[str, str], list[list]] = {}
     for row in pool:
-        text = " ".join(str(row["text"]).split())
-        if not is_clean(text):
-            continue
-        domain, model = parse_src(row["src"])
-        label = "human" if int(row["label"]) == 1 else "ai"
-        cells.setdefault((domain, label), []).append(
-            [f"mage-{SPLIT}-{row['row_idx']}", model, label, domain, text])
+        for index, (label, model, domain, text) in enumerate(mapper(row)):
+            text = " ".join(str(text).split())
+            if not is_clean(text):
+                continue
+            row_id = f"{name}-{row['row_idx']}-{index}"
+            cells.setdefault((domain, label), []).append(
+                [row_id, model, label, f"{name}:{domain}", text])
 
-    rng = random.Random(SEED)
+    rng = random.Random(f"{SEED}-{name}")
     rows_out: list[list] = []
     for domain in sorted({domain for domain, _ in cells}):
         human = cells.get((domain, "human"), [])
@@ -178,9 +272,8 @@ def collect(pool: list[dict]) -> list[list]:
                           MAX_WORDS)
             rows_out.append(_cut(human_row, n_words))
             rows_out.append(_cut(ai_row, n_words))
-        print(f"  {domain:10} human={len(human):5} ai={len(ai):5} "
+        print(f"  {name}:{domain:14} human={len(human):5} ai={len(ai):5} "
               f"pairs kept={n_pairs}", flush=True)
-    rng.shuffle(rows_out)
     return rows_out
 
 
@@ -202,20 +295,22 @@ def label_counts(path: str) -> dict:
     return dict(counts)
 
 
-def main() -> None:
-    """Build the MAGE subset and print label counts."""
-    try:
-        live = requests.get(INFO_API, timeout=30).json().get("sha")
-        if live and live != REVISION:
-            print(f"warning: {DATASET} is now at {live}, pinned {REVISION}; "
-                  "the rows API serves the live revision", flush=True)
-    except requests.RequestException:
-        pass
-    pool = fetch_pool()
-    print(f"pool: {len(pool)} rows", flush=True)
-    rows_out = collect(pool)
+def main(argv: list[str] | None = None) -> None:
+    """Build the combined set. `--only mage,hc3` limits the sources."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = list(SOURCES)
+    if "--only" in argv:
+        names = argv[argv.index("--only") + 1].split(",")
+    rows_out: list[list] = []
+    for name in names:
+        check_revision(name)
+        pool = fetch_pool(name)
+        print(f"{name}: pool {len(pool)} rows", flush=True)
+        rows_out.extend(collect(name, pool))
+    random.Random(SEED).shuffle(rows_out)
     write_csv(rows_out, OUT)
-    print(f"\ntotal rows: {len(rows_out)}", flush=True)
+    by_source = Counter(row[3].split(":")[0] for row in rows_out)
+    print(f"\ntotal rows: {len(rows_out)} {dict(by_source)}", flush=True)
     print(f"label counts: {label_counts(OUT)}", flush=True)
     print(f"saved -> {OUT}", flush=True)
 
