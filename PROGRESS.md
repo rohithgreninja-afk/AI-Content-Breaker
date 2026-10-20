@@ -29,10 +29,20 @@
 - Verification: `npm run build` passes TypeScript and Vite production bundling.
   A real `npm run dev` boot returned HTTP 200 from the frontend and proxied
   model status (`ready: true`, ExtraTrees); Ctrl+C released both listening ports.
-  `.venv\Scripts\python.exe -m unittest discover -s tests` passes all **195
-  tests** in 134.3 seconds, including CLI/API output parity, malformed requests,
+  `.venv\Scripts\python.exe -m unittest discover -s tests` passes all **197
+  tests** in 156.6 seconds, including CLI/API output parity, malformed requests,
   local-origin protection, duplicate-job prevention, training failure recovery,
   and a real temporary-artifact refit reproducing the shipped model's scores.
+- Browser verification covered the empty form, model readiness, sample loading,
+  complete pipeline/console output, tokens, first-sentence tree, all features,
+  short-text abstention, stale input, and recovery after stopping the server.
+  Checked 1440px, 887px, and 390px layouts with no document overflow. Simplified
+  the copy following user feedback and increased feature/table data to 12px
+  after an independent review; the reviewer scored that fix resolved.
+- Missing-manifest retries now regenerate the pinned dataset, and normal backend
+  shutdown stops its owned training process. The console transcript includes
+  the CLI-style input header. The final focused backend run passes all 16 tests.
+  Static UI audit has zero findings; design documentation lint has zero errors.
 
 ## 2026-10-20: Improve accuracy using training-only model selection (complete)
 
