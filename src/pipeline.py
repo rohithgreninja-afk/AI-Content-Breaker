@@ -49,9 +49,10 @@ SAMPLE = (
     "baselines on two public benchmarks and report where each one fails."
 )
 # Below this many words both scorers abstain instead of giving a verdict.
-# Every human training row is 96+ words, so shorter text is outside what
-# either scorer has seen: on human abstracts cut to 20 words, M5a calls 75%
-# of them AI and M5b 99%. Around 50 words M5a first rises clearly above chance.
+# The features need text to measure: on the MAGE held-out split M5b scores
+# 0.54 at 20-50 words (near chance) and 0.64+ above 50. (On the earlier RAID
+# data, where every human text was 96+ words, short text was also called AI
+# almost every time.)
 MIN_WORDS = 50
 SHOWN_FEATURES = (
     "parse_mean_depth", "parse_mean_branching", "sent_cv_len",
@@ -145,9 +146,9 @@ def _verdict(score: float | None, abstain: bool) -> str | None:
 
 
 def run_m5(ctx: dict) -> None:
-    # Whitespace-separated pieces holding at least one letter: the unit the
-    # 96-word human minimum was measured in. M1 tokens would count a hex hash
-    # or URL as dozens of words and let junk through the gate.
+    # Whitespace-separated pieces holding at least one letter, the same unit
+    # M0 uses for its word limits. M1 tokens would count a hex hash or URL as
+    # dozens of words and let junk through the gate.
     ctx["n_words"] = sum(
         1 for piece in ctx["text"].split() if any(c.isalpha() for c in piece))
     ctx["abstain"] = ctx["n_words"] < MIN_WORDS

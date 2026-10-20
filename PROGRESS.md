@@ -203,11 +203,11 @@
   -8.4). Collinearity inflates individual magnitudes, so read them as a group,
   not as independent importances. `parse_mean_depth` (+2.7) carries M3's signal.
 
-### Scoreboard
-| scorer | accuracy | notes |
+### Scoreboard (RAID era, superseded; see "Dataset switch: RAID -> MAGE")
+| scorer | RAID accuracy | MAGE accuracy (752 rows over 50 words) |
 |---|---|---|
-| M5a rules | 0.816 held-out | fully inspectable, no training |
-| M5b logreg | 0.847 test | ROC-AUC 0.941, CV 0.867 +- 0.031 |
+| M5a rules | 0.816 held-out | 0.561 |
+| M5b logreg | 0.847 test | 0.689 (0.634 on all 1184; AUC 0.687) |
 
 - CLI: `src\m5_scorer.py` (report), `--audit` (per-rule lift + calibration
   grids, for tuning), `--train` (fit, report, save), `--score FILE` (score one

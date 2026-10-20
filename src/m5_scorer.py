@@ -191,9 +191,9 @@ class ModelScorer:
         self.feature_names = tuple(feature_names)
 
     # Chosen by 5-fold CV on the training split alone (never the test split),
-    # over C in 0.01..100: train CV accuracy climbs 0.753 -> 0.867 and plateaus
-    # at 30. Stronger regularisation underfits here; the 89 features genuinely
-    # support a flexible boundary. Change it via fit(C=...) or select_C().
+    # over C in 0.01..100: on the MAGE sample train CV accuracy climbs
+    # 0.594 -> 0.653 and plateaus at 10-30. Stronger regularisation underfits
+    # here. Change it via fit(C=...) or select_C().
     DEFAULT_C = 30.0
 
     @staticmethod
