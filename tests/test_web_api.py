@@ -23,12 +23,13 @@ from m5_scorer import ModelScorer
 
 
 class TestAnalysisContract(unittest.TestCase):
-    def test_every_cli_stage_is_preserved_exactly(self):
+    def test_full_cli_transcript_preserves_input_context_and_every_stage(self):
         result = web_api.analyze_text(pipeline.SAMPLE)
         output = io.StringIO()
         with redirect_stdout(output):
-            pipeline.run_pipeline(pipeline.SAMPLE)
-        self.assertEqual(result["console_output"], output.getvalue())
+            pipeline.main(["--text", pipeline.SAMPLE])
+        expected = output.getvalue().replace("input: --text (", "input: web text (", 1)
+        self.assertEqual(result["console_output"], expected)
         self.assertEqual([stage["id"] for stage in result["stages"]], ["M1", "M2", "M3", "M4", "M5"])
         self.assertEqual(len(result["features"]["all"]), 89)
         self.assertIsInstance(result["parser"]["first_tree"], str)
@@ -37,6 +38,7 @@ class TestAnalysisContract(unittest.TestCase):
 
     def test_short_text_abstains_in_both_scorers(self):
         result = web_api.analyze_text("A short sentence.")
+        self.assertTrue(result["console_output"].startswith("input: web text (17 characters)\n"))
         self.assertTrue(result["summary"]["abstain"])
         self.assertEqual(result["summary"]["model_verdict"], "abstain")
         self.assertEqual(result["summary"]["rule_verdict"], "abstain")

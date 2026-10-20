@@ -66,8 +66,8 @@ def analyze_text(text: str) -> dict:
         "features": {"all": context["features"],
                      "selected": {name: context["features"][name] for name in pipeline.SHOWN_FEATURES}},
         "rules": context["rules"], "stages": stages,
-        "console_output": "".join(f"\n== {stage['id']} {stage['name']} ==\n{stage['output']}"
-                                  for stage in stages),
+        "console_output": f"input: web text ({len(text)} characters)\n" + "".join(
+            f"\n== {stage['id']} {stage['name']} ==\n{stage['output']}" for stage in stages),
     }
 
 
