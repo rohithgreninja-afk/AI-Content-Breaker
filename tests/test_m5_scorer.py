@@ -1,7 +1,7 @@
 """Smoke tests for M5: rule scorer and logistic-regression classifier.
 
 The model tests train on a small synthetic set so they stay fast and do not
-depend on data/raid_clean.csv (which is gitignored and regenerable).
+depend on data/mage_clean.csv (which is gitignored and regenerable).
 """
 
 from __future__ import annotations

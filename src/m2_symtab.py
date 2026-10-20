@@ -49,14 +49,14 @@ def top_words(sym_tab: dict[str, dict], n: int = 10) -> list[tuple[str, int]]:
 
 
 def main() -> None:
-    """Pipe one RAID row through M1 then M2 and print the top 10 words."""
+    """Pipe one MAGE row through M1 then M2 and print the top 10 words."""
     import csv
     import os
 
     from m1_lexer import tokenize
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    csv_path = os.path.join(repo_root, "data", "raid_clean.csv")
+    csv_path = os.path.join(repo_root, "data", "mage_clean.csv")
     with open(csv_path, encoding="utf-8") as handle:
         row = next(csv.DictReader(handle))
 

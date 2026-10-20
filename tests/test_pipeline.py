@@ -155,7 +155,8 @@ class TestTestSplitRow(unittest.TestCase):
         with redirect_stdout(buffer):
             pipeline.main(["--eval"])
         out = buffer.getvalue()
-        self.assertIn("held-out test split: 190 rows", out)
+        n_test = len(pipeline._test_rows())
+        self.assertIn(f"held-out test split: {n_test} rows", out)
         self.assertIn(f"abstained (under {pipeline.MIN_WORDS} words)", out)
         self.assertIn("M5a rules", out)
 

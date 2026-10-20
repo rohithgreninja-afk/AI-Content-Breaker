@@ -2,7 +2,7 @@
 
     python src/pipeline.py FILE            analyse a text file
     python src/pipeline.py --text "..."    analyse a string
-    python src/pipeline.py --test N        analyse row N (0-189) of the held-out
+    python src/pipeline.py --test N        analyse row N (0-based) of the held-out
                                            test split, the rows M5b never trained on
     python src/pipeline.py --eval          run every test-split row and report
                                            accuracy for M5a and M5b

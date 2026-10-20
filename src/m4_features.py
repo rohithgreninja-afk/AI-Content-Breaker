@@ -324,7 +324,7 @@ def main() -> None:
     import csv
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    csv_path = os.path.join(repo_root, "data", "raid_clean.csv")
+    csv_path = os.path.join(repo_root, "data", "mage_clean.csv")
     with open(csv_path, encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
 

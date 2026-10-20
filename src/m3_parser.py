@@ -979,11 +979,11 @@ def render_tree(node: dict, indent: int = 0) -> str:
 
 
 def main() -> None:
-    """Pipe one RAID row through M1 then M3 and print the parse summary."""
+    """Pipe one MAGE row through M1 then M3 and print the parse summary."""
     import csv
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    csv_path = os.path.join(repo_root, "data", "raid_clean.csv")
+    csv_path = os.path.join(repo_root, "data", "mage_clean.csv")
     with open(csv_path, encoding="utf-8") as handle:
         row = next(csv.DictReader(handle))
 
