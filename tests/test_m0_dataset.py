@@ -88,6 +88,16 @@ class PairTests(unittest.TestCase):
 
 
 class FetchTests(unittest.TestCase):
+    def test_only_incomplete_trailing_record_can_be_recovered(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "pool.jsonl"
+            path.write_bytes(b'{"row_idx": 1}\n{"row_idx":')
+            self.assertEqual(dataset._read_pool(str(path)), [{"row_idx": 1}])
+            self.assertEqual(path.read_bytes(), b'{"row_idx": 1}\n')
+            path.write_bytes(b'{"row_idx":}\n{"row_idx": 2}\n')
+            with self.assertRaisesRegex(RuntimeError, "corrupt cached JSONL"):
+                dataset._read_pool(str(path))
+
     def test_rows_api_rejects_unpinned_revision(self):
         response = Mock(status_code=200, headers={"x-revision": "changed"})
         with patch.object(dataset.requests, "get", return_value=response):

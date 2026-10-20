@@ -217,6 +217,34 @@ def _atomic_json(value: dict, path: str) -> None:
             os.remove(temporary)
 
 
+def _read_pool(path: str) -> list[dict]:
+    """Recover only an interrupted final JSONL write, rejecting other damage."""
+    rows = []
+    truncate_at = None
+    needs_newline = False
+    with open(path, "rb") as handle:
+        while True:
+            start = handle.tell()
+            line = handle.readline()
+            if not line:
+                break
+            try:
+                rows.append(json.loads(line))
+            except (ValueError, UnicodeDecodeError):
+                if line.endswith(b"\n") or handle.read(1):
+                    raise RuntimeError(f"corrupt cached JSONL record at byte {start}")
+                truncate_at = start
+                break
+            needs_newline = not line.endswith(b"\n")
+    if truncate_at is not None:
+        with open(path, "r+b") as handle:
+            handle.truncate(truncate_at)
+    elif needs_newline:
+        with open(path, "ab") as handle:
+            handle.write(b"\n")
+    return rows
+
+
 def fetch_pool(name: str) -> list[dict]:
     """Read one source's blocks at seeded random offsets into its pool file.
 
@@ -228,8 +256,7 @@ def fetch_pool(name: str) -> list[dict]:
     metadata_path = os.path.join(DATA_DIR, f"{name}_pool.meta.json")
     rows: list[dict] = []
     if os.path.exists(path):
-        with open(path, encoding="utf-8") as handle:
-            rows = [json.loads(line) for line in handle]
+        rows = _read_pool(path)
     have = {row["row_idx"] for row in rows}
     if len(have) != len(rows):
         raise RuntimeError(f"{name}: duplicate row indices in cached pool")
@@ -249,6 +276,8 @@ def fetch_pool(name: str) -> list[dict]:
             metadata = json.load(handle)
         if any(metadata.get(key) != value for key, value in identity.items()):
             raise RuntimeError(f"{name}: cache identity differs from pinned source")
+        if metadata.get("sample_offsets", offsets) != offsets:
+            raise RuntimeError(f"{name}: requested sample differs from cached sample")
         if metadata.get("pool_sha256") and metadata["pool_sha256"] != file_sha256(path):
             raise RuntimeError(f"{name}: cached pool digest does not match metadata")
         completed = set(metadata.get("completed_offsets", []))
@@ -279,7 +308,8 @@ def fetch_pool(name: str) -> list[dict]:
             finally:
                 if os.path.exists(temporary):
                     os.remove(temporary)
-    metadata = {**identity, "completed_offsets": sorted(completed)}
+    metadata = {**identity, "sample_offsets": offsets,
+                "completed_offsets": sorted(completed)}
     _atomic_json(metadata, metadata_path)
     todo = [offset for offset in offsets if offset not in completed]
     if todo:
