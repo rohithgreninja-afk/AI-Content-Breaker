@@ -1,0 +1,110 @@
+{
+  "audit_date": "2026-10-20",
+  "scope": "Sample-level verification of the immutable Parquet fallback against rows-API content.",
+  "checks": {
+    "hc3": {
+      "dataset": "Hello-SimpleAI/HC3",
+      "source_url": "https://huggingface.co/datasets/Hello-SimpleAI/HC3",
+      "source_revision": "4d0ff18143b5a7e1b1e79beb540c04549d1e59d3",
+      "conversion_revision": "7444b1cb1469246e7b5d191b03f69b7e7c951134",
+      "config": "all",
+      "split": "train",
+      "expected_converted_rows": 24322,
+      "partial_available_split": false,
+      "comparison": {
+        "method": "Compare every cached raw row field with m0_parquet.parquet_page(...), reading all Parquet columns; compare canonical subset content digests.",
+        "original_rows_api_block_offsets": [
+          212,
+          819,
+          869,
+          976,
+          1041,
+          2848,
+          3070,
+          3358,
+          3648,
+          4572,
+          5094,
+          5231,
+          6515,
+          7164
+        ],
+        "block_length": 100,
+        "blocks": 14,
+        "unique_rows": 1315,
+        "raw_dataset_fields": [
+          "chatgpt_answers",
+          "human_answers",
+          "id",
+          "question",
+          "source"
+        ],
+        "raw_field_count": 5,
+        "row_idx_checked": true,
+        "all_fields_equal": true,
+        "mismatches": 0,
+        "rows_api_cached_subset_sha256": "a6de90313db8fd9e312e1e78b2a1398def414fd8d7f9154ad7340aa25bcef3f2",
+        "parquet_subset_sha256": "a6de90313db8fd9e312e1e78b2a1398def414fd8d7f9154ad7340aa25bcef3f2",
+        "comparison_seconds": 19.3695188,
+        "parquet_bytes_downloaded": 15487077,
+        "verified_by": "audit_training agent"
+      }
+    },
+    "wiki": {
+      "dataset": "aadityaubhat/GPT-wiki-intro",
+      "source_url": "https://huggingface.co/datasets/aadityaubhat/GPT-wiki-intro",
+      "source_revision": "017258d41991489752363bfa4cbcc12725786967",
+      "conversion_revision": "5f831a4d91cfd3cd4eb7cb5acdd7a880be43c78e",
+      "config": "default",
+      "split": "train",
+      "expected_converted_rows": 150000,
+      "partial_available_split": false,
+      "comparison": {
+        "method": "Direct equality of the complete rows-API raw row and all-column immutable Parquet raw row.",
+        "row_indices": [
+          0
+        ],
+        "unique_rows": 1,
+        "raw_field_count": 12,
+        "all_fields_equal": true,
+        "mismatches": 0,
+        "verified_by": "dataset_audit agent, confirmed by root"
+      }
+    },
+    "raid": {
+      "dataset": "liamdugan/raid",
+      "source_url": "https://huggingface.co/datasets/liamdugan/raid",
+      "source_revision": "865cac74188466cb0c3b7574a10204007b57a459",
+      "conversion_revision": "5008b2d167f74bfd4ceff6b3b0512b7097d7cbb1",
+      "config": "raid",
+      "split": "train",
+      "expected_converted_rows": 2270000,
+      "partial_available_split": true,
+      "comparison": {
+        "method": "Direct equality of the complete rows-API raw row and all-column immutable Parquet raw row.",
+        "row_indices": [
+          0
+        ],
+        "unique_rows": 1,
+        "raw_field_count": 11,
+        "all_fields_equal": true,
+        "mismatches": 0,
+        "verified_by": "dataset_audit agent, confirmed by root"
+      }
+    }
+  },
+  "canonical_digest_format": "sha256-canonical-json-v1: sort rows by row_idx; JSON encode every raw row including row_idx with sorted keys, UTF-8, ensure_ascii=False, separators=(comma,colon), allow_nan=False; hash each JSON record followed by LF.",
+  "offline_verification": [
+    "All five test_parquet_fetch tests passed, including global indices across row groups/shards, bounded HTTP ranges, unchanged source revision and expected split length.",
+    "Additional in-memory all-column comparison preserved every field of nested/null records exactly across row-group boundaries."
+  ],
+  "limitations": [
+    "Source commits and Parquet conversion commits are separately pinned and verified. Matching current source SHA and representative row content does not establish a cryptographic conversion-to-source association.",
+    "HC3 comparison covers all 1,315 unique rows retained from the 14 original API blocks, not the complete source corpus.",
+    "Wiki and RAID comparisons cover only row 0 of each converted split; no full-corpus equality claim is made.",
+    "RAID uses the 2,270,000-row available partial conversion, not an asserted full source split.",
+    "The rows API can truncate large cells. New fetch blocks reject nonempty truncated_cells; this audit found no existing HC3 API-cache mismatch.",
+    "Final training sample coverage, grouping, balance, split independence and fitted-model validation are recorded separately from this transport audit.",
+    "No source dataset, fetch cache or model artifact was modified by these verification comparisons."
+  ]
+}
