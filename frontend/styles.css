@@ -546,8 +546,10 @@ textarea {
   color: var(--ink);
   font-size: 13px;
   line-height: 1.85;
-  resize: none;
   caret-color: var(--ochre);
+}
+.resize-none {
+  resize: none;
 }
 textarea::placeholder {
   color: #748190;

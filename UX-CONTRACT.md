@@ -2,7 +2,7 @@
 
 This is one local analysis workflow; there are no sibling screens or pre-existing UI owners.
 
-| Capability | Canonical owner | Source of truth | Variants | Verification |
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
 | Form | frontend/App.tsx analysis form | Pipeline word gate; API character limit | Empty, editing, analyzing, error, complete | Live browser submission and validation |
 | Scrollbar | frontend/styles.css global baseline | DESIGN.md CSS tokens | Document, textarea, console | Desktop and narrow viewport inspection |

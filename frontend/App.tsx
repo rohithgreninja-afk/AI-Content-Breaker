@@ -736,6 +736,7 @@ export default function App() {
                 </div>
                 <div className="textarea-wrap">
                   <textarea
+                    className="resize-none"
                     ref={input}
                     id="source-text"
                     placeholder="Paste or write your text here…"
