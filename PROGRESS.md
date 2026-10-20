@@ -1,5 +1,69 @@
 # PROGRESS
 
+## 2026-10-20: MAGE audit and additional dataset training (complete)
+
+This section supersedes the historical RAID and MAGE scoreboards below.
+
+- Audited the original MAGE model before replacing it. Its saved scaler and
+  coefficients reproduce exactly, as do the README metrics (0.634 all-row
+  accuracy; 0.689 after the word gate). The original row split allowed 139
+  test texts to share a 20-word opening with training texts; the new training
+  uses connected document groups instead. Evidence: `reports/mage_audit.json`.
+- Finished M0's combined corpus: **7,490 texts, 3,745 per class**. MAGE 4,734;
+  HC3 1,956 across five English domains; GPT-wiki-intro 600; RAID 200 news
+  texts. RAID's API/conversion exposes only a partial split, and the seeded
+  pool had no clean human rows in the other available domains. Those domains
+  contribute no training examples. No all-domain RAID claim is made.
+- Every source/domain has identical human/AI word-length histograms, with
+  20–300 words per text. Removed one duplicate pair after truncation. Grouped
+  related source IDs, shared 20-word openings across corpora, and matched
+  pairs; 2,796 independent groups remain. No normalized duplicate text or
+  related group crosses the train/test boundary.
+- Fetching verifies source revisions and checkpoints complete blocks, recovers
+  interrupted JSONL tails, rejects truncated API cells, and uses canonical
+  sorted pool digests. The rows service repeatedly returned 502/503, so the
+  completed run used `--parquet`: bounded byte ranges from separately pinned
+  immutable conversions. Every original HC3 API cache row (1,315 unique
+  rows) matches Parquet in every field; Wiki/RAID representative rows also
+  match. Evidence and verification limits: `reports/dataset_transport_audit.json`.
+- **M5b retrained and saved** on 5,580 texts (2,130 groups), holding out 1,910
+  texts (666 groups). Every dataset contributes training rows: MAGE 3,642;
+  HC3 1,352; Wiki 440; RAID 146. Scaling stays inside the training folds.
+  Five-fold grouped training-only CV selected **C=10**, accuracy
+  **0.672 ± 0.019**. Logistic regression converged in **247/2,000 iterations**.
+- Held-out model accuracy **0.6864**, ROC-AUC **0.7550**; confusion
+  `[[668,287],[312,643]]`. The pipeline abstains below 50 alphabetic words:
+  556 abstentions, 1,354 scored rows (**70.9% coverage**), accuracy **0.7341**.
+  Source-specific gated accuracies: HC3 0.8485; MAGE 0.6846; Wiki 0.6623;
+  RAID 0.5849 (only 53 scored RAID rows).
+- M5a's nine rules stay frozen as an inspectable MAGE comparison. Their new
+  corpus metrics are descriptive, since their historical tuning rows can
+  overlap this holdout; they are not an independent rule benchmark.
+- The classifier now stores dataset/manifest/feature hashes, exact split IDs
+  and groups, tagger mode, and runtime versions. Evaluation refuses mismatched
+  data, altered groups, or stale provenance, and scores with the validated
+  model instance. Model loading rejects a changed feature extractor or tagger.
+- Shipped the small `models/m5_logreg.joblib` and `models/training_report.json`.
+  Downloaded corpora/caches remain ignored. Pinned training dependencies.
+  README now begins with training commands, test runs, and all four datasets.
+- **Verified:** all **152 tests pass**, including the actual saved holdout;
+  `pip check` is clean; demo text and heldout-row commands work. A cached M0
+  rebuild reproduces the exact CSV and manifest hashes. `verify_training.py`
+  confirms finite features, balance, no duplicate/leaked texts, convergence,
+  and model/report metric agreement. A fresh fit reproduces all scaler means,
+  scales, coefficients, and intercepts with maximum difference **0.0**.
+- On the identical final gated holdout, a MAGE-only reference fit (C=30)
+  scores **0.6773**, versus **0.7341** for combined training. Broader training
+  improves the overall reference comparison but reduces MAGE-only accuracy
+  from **0.7137 to 0.6846**. This is an internal sample comparison, not an
+  external benchmark. Evidence: `reports/training_validation.json`.
+
+Reproduce with the PowerShell commands near the beginning of `README.md`.
+For outage recovery use `src/m0_dataset.py --parquet`; train with
+`src/m5_scorer.py --train --select-c`; verify with `scripts/verify_training.py`.
+
+## Historical implementation notes
+
 ## M0 - Dataset (DONE, verified)
 - `src/m0_dataset.py` builds `data/raid_clean.csv` from the RAID benchmark.
 - Switched from the datasets-server rows API (kept 429-rate-limiting) to

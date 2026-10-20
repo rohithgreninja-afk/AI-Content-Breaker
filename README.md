@@ -113,6 +113,9 @@ Gated accuracy varies by source: HC3 84.8%, MAGE 68.5%, Wiki 66.2%, and RAID
 and length balance, and finite features, then reproduces the saved model's
 scaler and coefficients. It also compares combined and MAGE-only training
 on identical held-out rows, writing `reports/training_validation.json`.
+A MAGE-only reference fit (C=30) scores 67.7% on the same gated holdout,
+versus 73.4% for the combined fit. MAGE's own gated accuracy falls from
+71.4% to 68.5%, so the broader training has a source-specific tradeoff.
 M5a's nine inspectable rules remain frozen from the earlier MAGE training;
 their new-corpus results are comparisons, because their original tuning rows
 can overlap the new holdout. M5b is the newly trained classifier.
