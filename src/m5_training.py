@@ -217,6 +217,7 @@ def committed_json(path: Path) -> str:
 def finalize() -> None:
     """Fit the committed winner, then evaluate the fixed holdout without tuning."""
     from datetime import datetime, timezone
+    from importlib.metadata import version
 
     protocol = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
     selection = json.loads(SELECTION_PATH.read_text(encoding="utf-8"))
@@ -274,6 +275,7 @@ def finalize() -> None:
         "feature_extractor_sha256": feature_extractor_sha256(),
         "split_method": "stratified_group", "random_state": 42, "test_size": 0.25,
         "versions": runtime_versions(), "trained_at_utc": datetime.now(timezone.utc).isoformat(),
+        "training_thread_limit": 2, "threadpoolctl_version": version("threadpoolctl"),
         "estimator_config": winner["config"], "selection_sha256": json_digest(selection),
         "training_protocol_sha256": json_digest(protocol), "selection_commit": selection_commit,
         "protocol_commit": protocol_commit,

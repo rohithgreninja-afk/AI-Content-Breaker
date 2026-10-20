@@ -5,3 +5,4 @@ numpy==2.5.4
 datasets==5.1.0
 joblib==1.6.0
 pyarrow==26.0.0
+threadpoolctl==3.7.0
