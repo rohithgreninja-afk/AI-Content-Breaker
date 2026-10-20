@@ -38,7 +38,7 @@ from m5_scorer import (  # noqa: E402
     MODEL_PATH,
     ModelScorer,
     RuleScorer,
-    split_indices,
+    dataset_metadata,
 )
 
 SAMPLE = (
@@ -205,11 +205,28 @@ def run_pipeline(text: str, stages=None, show: bool = True) -> dict:
 
 
 def _test_rows() -> list[dict]:
-    """Rows of M5's held-out test split, in split order."""
+    """Use the saved model's actual holdout, after checking data provenance."""
+    if not os.path.exists(MODEL_PATH):
+        raise ValueError("no saved model; run src/m5_scorer.py --train first")
+    model = ModelScorer.load()
+    provenance = dataset_metadata(DATA_PATH)
+    if model.metadata.get("dataset_sha256") != provenance["dataset_sha256"]:
+        raise ValueError("saved model does not match the current dataset; "
+                         "run src/m5_scorer.py --train before --eval or --test")
     with open(DATA_PATH, encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    _, test_idx = split_indices([row["label"] for row in rows])
-    return [rows[i] for i in test_idx]
+    by_id = {row["id"]: row for row in rows}
+    train_ids = model.metadata.get("train_ids", [])
+    test_ids = model.metadata.get("test_ids", [])
+    if (not train_ids or not test_ids or set(train_ids) & set(test_ids)
+            or len(set(train_ids + test_ids)) != len(rows)
+            or set(train_ids + test_ids) != set(by_id)):
+        raise ValueError("saved model has invalid split provenance; retrain")
+    groups = dict(zip(provenance["row_ids"], provenance["groups"]))
+    if {groups[i] for i in train_ids} & {groups[i] for i in test_ids}:
+        raise ValueError("saved model split contains related texts in both "
+                         "training and test data; retrain")
+    return [by_id[row_id] for row_id in test_ids]
 
 
 def test_split_row(n: int) -> tuple[str, str]:
@@ -242,6 +259,7 @@ def evaluate_test_split() -> None:
     Rows under MIN_WORDS get no verdict, so they are counted and left out of
     the accuracy figures rather than scored as right or wrong.
     """
+    # Validate before running any feature extraction or reporting accuracy.
     rows = _test_rows()
     truth: list[int] = []
     rule_scores: list[float] = []
@@ -273,14 +291,20 @@ def evaluate_test_split() -> None:
 def main(argv: list[str] | None = None) -> None:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--eval" in argv:
-        evaluate_test_split()
+        try:
+            evaluate_test_split()
+        except (ValueError, FileNotFoundError) as error:
+            raise SystemExit(str(error)) from error
         return
     if "--text" in argv:
         text = argv[argv.index("--text") + 1]
         source = "--text"
     elif "--test" in argv:
         n = int(argv[argv.index("--test") + 1])
-        text, label = test_split_row(n)
+        try:
+            text, label = test_split_row(n)
+        except (ValueError, FileNotFoundError) as error:
+            raise SystemExit(str(error)) from error
         source = f"test split row {n} (true label: {label})"
     elif argv and not argv[0].startswith("--"):
         with open(argv[0], encoding="utf-8") as handle:

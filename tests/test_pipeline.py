@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import io
+import csv
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -137,6 +141,58 @@ class TestExtensionPoint(unittest.TestCase):
 
     def test_default_stages_start_as_core(self):
         self.assertEqual(tuple(pipeline.STAGES), pipeline.CORE_STAGES)
+
+
+class TestSavedHoldout(unittest.TestCase):
+    """Evaluation must never invent a split for a stale or unrelated model."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "train_clean.csv"
+        with self.path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["id", "label", "text"])
+            writer.writeheader()
+            writer.writerows([
+                {"id": "a", "label": "human", "text": "training text"},
+                {"id": "b", "label": "ai", "text": "test text"},
+            ])
+        self.metadata = {"dataset_sha256": "current", "train_ids": ["a"],
+                         "test_ids": ["b"]}
+        self.provenance = {"dataset_sha256": "current", "row_ids": ["a", "b"],
+                           "groups": ["group-a", "group-b"]}
+        for mock in (
+            patch.object(pipeline, "DATA_PATH", str(self.path)),
+            patch.object(pipeline, "MODEL_PATH", str(self.path)),
+            patch.object(pipeline.ModelScorer, "load",
+                         return_value=SimpleNamespace(metadata=self.metadata)),
+            patch.object(pipeline, "dataset_metadata", return_value=self.provenance),
+        ):
+            mock.start()
+            self.addCleanup(mock.stop)
+
+    def test_uses_saved_test_ids(self):
+        self.assertEqual([r["id"] for r in pipeline._test_rows()], ["b"])
+
+    def test_rejects_changed_dataset(self):
+        self.metadata["dataset_sha256"] = "old"
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            pipeline._test_rows()
+
+    def test_rejects_legacy_artifact_without_provenance(self):
+        self.metadata.clear()
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            pipeline._test_rows()
+
+    def test_rejects_train_test_overlap(self):
+        self.metadata["test_ids"] = ["a"]
+        with self.assertRaisesRegex(ValueError, "invalid split"):
+            pipeline._test_rows()
+
+    def test_rejects_related_texts_across_split(self):
+        self.provenance["groups"] = ["same-question", "same-question"]
+        with self.assertRaisesRegex(ValueError, "related texts"):
+            pipeline._test_rows()
 
 
 @unittest.skipUnless(Path(DATA_PATH).exists(), "dataset not generated")
