@@ -24,6 +24,11 @@ interrupted fetch. Every response must match its recorded dataset revision.
 If the upstream revision changes, the build stops instead of silently changing
 the training sample.
 
+If the rows service repeatedly returns gateway errors, resume with
+`.venv\Scripts\python.exe src\m0_dataset.py --parquet`. This reads the same
+seeded row windows from separately pinned, immutable Parquet conversions;
+both revision identities are recorded in the manifest and training report.
+
 Training uses a grouped holdout and chooses regularization with five-fold CV
 on the training groups only. Related questions, articles, continuations,
 shared openings, and length-matched pairs stay together. Scaling is fitted
@@ -49,6 +54,7 @@ with M0 first:
 .venv\Scripts\python.exe src\pipeline.py --test 0
 .venv\Scripts\python.exe demo.py --eval
 .venv\Scripts\python.exe -m unittest discover -s tests
+.venv\Scripts\python.exe scripts\verify_training.py
 ```
 
 Evaluation checks the dataset hash and saved split membership before scoring.
@@ -91,6 +97,10 @@ training set. Those historical row-split figures are not directly comparable
 to the new grouped evaluation. See `reports/mage_audit.json` for the evidence.
 
 Current training results are recorded in `models/training_report.json`.
+`scripts/verify_training.py` checks the dataset, related-text groups, class
+and length balance, and finite features, then reproduces the saved model's
+scaler and coefficients. It also compares combined and MAGE-only training
+on identical held-out rows, writing `reports/training_validation.json`.
 M5a's nine inspectable rules remain frozen from the earlier MAGE training;
 their new-corpus results are comparisons, because their original tuning rows
 can overlap the new holdout. M5b is the newly trained classifier.
