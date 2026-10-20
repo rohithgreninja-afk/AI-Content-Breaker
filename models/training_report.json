@@ -18926,5 +18926,422 @@
     "test_used_for_selection": false,
     "cv_note": "Selection CV is optimistic for the selected winner; it is not a nested-CV or independent-test estimate."
   },
-  "holdout_note": "The same previously published internal holdout is evaluated only after the training-only winner is committed. It is not a new unseen external benchmark."
+  "holdout_note": "The same previously published internal holdout is evaluated only after the training-only winner is committed. It is not a new unseen external benchmark.",
+  "previous_published_evaluation": {
+    "overall": {
+      "n_test": 1910,
+      "n_scored": 1354,
+      "n_abstained": 556,
+      "coverage": 0.7089005235602094,
+      "all_rows": {
+        "model": {
+          "n": 1910,
+          "accuracy": 0.6863874345549739,
+          "precision": 0.6913978494623656,
+          "recall": 0.6732984293193718,
+          "f1": 0.6822281167108754,
+          "roc_auc": 0.7549913653682739,
+          "confusion_matrix": [
+            [
+              668,
+              287
+            ],
+            [
+              312,
+              643
+            ]
+          ]
+        },
+        "rules": {
+          "n": 1910,
+          "accuracy": 0.5743455497382199,
+          "precision": 0.5750528541226215,
+          "recall": 0.5696335078534032,
+          "f1": 0.572330352446081,
+          "roc_auc": 0.5885184068419177,
+          "confusion_matrix": [
+            [
+              553,
+              402
+            ],
+            [
+              411,
+              544
+            ]
+          ]
+        }
+      },
+      "at_least_50_words": {
+        "model": {
+          "n": 1354,
+          "accuracy": 0.7341211225997046,
+          "precision": 0.7435508345978755,
+          "recall": 0.7195301027900147,
+          "f1": 0.7313432835820896,
+          "roc_auc": 0.8149103342039175,
+          "confusion_matrix": [
+            [
+              504,
+              169
+            ],
+            [
+              191,
+              490
+            ]
+          ]
+        },
+        "rules": {
+          "n": 1354,
+          "accuracy": 0.5952732644017725,
+          "precision": 0.607085346215781,
+          "recall": 0.55359765051395,
+          "f1": 0.5791090629800307,
+          "roc_auc": 0.6170619205652033,
+          "confusion_matrix": [
+            [
+              429,
+              244
+            ],
+            [
+              304,
+              377
+            ]
+          ]
+        }
+      }
+    },
+    "per_source": {
+      "hc3": {
+        "n_test": 604,
+        "n_scored": 462,
+        "n_abstained": 142,
+        "coverage": 0.7649006622516556,
+        "all_rows": {
+          "model": {
+            "n": 604,
+            "accuracy": 0.8062913907284768,
+            "precision": 0.7917981072555205,
+            "recall": 0.8311258278145696,
+            "f1": 0.8109854604200323,
+            "roc_auc": 0.8969124161221,
+            "confusion_matrix": [
+              [
+                236,
+                66
+              ],
+              [
+                51,
+                251
+              ]
+            ]
+          },
+          "rules": {
+            "n": 604,
+            "accuracy": 0.6771523178807947,
+            "precision": 0.6801346801346801,
+            "recall": 0.6688741721854304,
+            "f1": 0.674457429048414,
+            "roc_auc": 0.6952436296653655,
+            "confusion_matrix": [
+              [
+                207,
+                95
+              ],
+              [
+                100,
+                202
+              ]
+            ]
+          }
+        },
+        "at_least_50_words": {
+          "model": {
+            "n": 462,
+            "accuracy": 0.8484848484848485,
+            "precision": 0.8565217391304348,
+            "recall": 0.8418803418803419,
+            "f1": 0.8491379310344828,
+            "roc_auc": 0.9365347128505023,
+            "confusion_matrix": [
+              [
+                195,
+                33
+              ],
+              [
+                37,
+                197
+              ]
+            ]
+          },
+          "rules": {
+            "n": 462,
+            "accuracy": 0.6991341991341992,
+            "precision": 0.7209302325581395,
+            "recall": 0.6623931623931624,
+            "f1": 0.6904231625835189,
+            "roc_auc": 0.7202166741640426,
+            "confusion_matrix": [
+              [
+                168,
+                60
+              ],
+              [
+                79,
+                155
+              ]
+            ]
+          }
+        }
+      },
+      "mage": {
+        "n_test": 1092,
+        "n_scored": 688,
+        "n_abstained": 404,
+        "coverage": 0.63003663003663,
+        "all_rows": {
+          "model": {
+            "n": 1092,
+            "accuracy": 0.63003663003663,
+            "precision": 0.6381322957198443,
+            "recall": 0.6007326007326007,
+            "f1": 0.6188679245283019,
+            "roc_auc": 0.6718089602704987,
+            "confusion_matrix": [
+              [
+                360,
+                186
+              ],
+              [
+                218,
+                328
+              ]
+            ]
+          },
+          "rules": {
+            "n": 1092,
+            "accuracy": 0.5265567765567766,
+            "precision": 0.5247863247863248,
+            "recall": 0.5622710622710623,
+            "f1": 0.5428824049513705,
+            "roc_auc": 0.5333611748446914,
+            "confusion_matrix": [
+              [
+                268,
+                278
+              ],
+              [
+                239,
+                307
+              ]
+            ]
+          }
+        },
+        "at_least_50_words": {
+          "model": {
+            "n": 688,
+            "accuracy": 0.684593023255814,
+            "precision": 0.6904761904761905,
+            "recall": 0.672463768115942,
+            "f1": 0.6813509544787077,
+            "roc_auc": 0.7473782059407614,
+            "confusion_matrix": [
+              [
+                239,
+                104
+              ],
+              [
+                113,
+                232
+              ]
+            ]
+          },
+          "rules": {
+            "n": 688,
+            "accuracy": 0.5450581395348837,
+            "precision": 0.546242774566474,
+            "recall": 0.5478260869565217,
+            "f1": 0.5470332850940666,
+            "roc_auc": 0.5623484176279208,
+            "confusion_matrix": [
+              [
+                186,
+                157
+              ],
+              [
+                156,
+                189
+              ]
+            ]
+          }
+        }
+      },
+      "raid": {
+        "n_test": 54,
+        "n_scored": 53,
+        "n_abstained": 1,
+        "coverage": 0.9814814814814815,
+        "all_rows": {
+          "model": {
+            "n": 54,
+            "accuracy": 0.5925925925925926,
+            "precision": 0.5757575757575758,
+            "recall": 0.7037037037037037,
+            "f1": 0.6333333333333333,
+            "roc_auc": 0.6406035665294926,
+            "confusion_matrix": [
+              [
+                13,
+                14
+              ],
+              [
+                8,
+                19
+              ]
+            ]
+          },
+          "rules": {
+            "n": 54,
+            "accuracy": 0.5555555555555556,
+            "precision": 0.5714285714285714,
+            "recall": 0.4444444444444444,
+            "f1": 0.5,
+            "roc_auc": 0.5,
+            "confusion_matrix": [
+              [
+                18,
+                9
+              ],
+              [
+                15,
+                12
+              ]
+            ]
+          }
+        },
+        "at_least_50_words": {
+          "model": {
+            "n": 53,
+            "accuracy": 0.5849056603773585,
+            "precision": 0.5625,
+            "recall": 0.6923076923076923,
+            "f1": 0.6206896551724138,
+            "roc_auc": 0.6267806267806268,
+            "confusion_matrix": [
+              [
+                13,
+                14
+              ],
+              [
+                8,
+                18
+              ]
+            ]
+          },
+          "rules": {
+            "n": 53,
+            "accuracy": 0.5471698113207547,
+            "precision": 0.55,
+            "recall": 0.4230769230769231,
+            "f1": 0.4782608695652174,
+            "roc_auc": 0.48290598290598297,
+            "confusion_matrix": [
+              [
+                18,
+                9
+              ],
+              [
+                15,
+                11
+              ]
+            ]
+          }
+        }
+      },
+      "wiki": {
+        "n_test": 160,
+        "n_scored": 151,
+        "n_abstained": 9,
+        "coverage": 0.94375,
+        "all_rows": {
+          "model": {
+            "n": 160,
+            "accuracy": 0.65,
+            "precision": 0.6818181818181818,
+            "recall": 0.5625,
+            "f1": 0.6164383561643836,
+            "roc_auc": 0.7321875,
+            "confusion_matrix": [
+              [
+                59,
+                21
+              ],
+              [
+                35,
+                45
+              ]
+            ]
+          },
+          "rules": {
+            "n": 160,
+            "accuracy": 0.51875,
+            "precision": 0.5348837209302325,
+            "recall": 0.2875,
+            "f1": 0.37398373983739835,
+            "roc_auc": 0.613984375,
+            "confusion_matrix": [
+              [
+                60,
+                20
+              ],
+              [
+                57,
+                23
+              ]
+            ]
+          }
+        },
+        "at_least_50_words": {
+          "model": {
+            "n": 151,
+            "accuracy": 0.6622516556291391,
+            "precision": 0.7049180327868853,
+            "recall": 0.5657894736842105,
+            "f1": 0.6277372262773723,
+            "roc_auc": 0.7371929824561403,
+            "confusion_matrix": [
+              [
+                57,
+                18
+              ],
+              [
+                33,
+                43
+              ]
+            ]
+          },
+          "rules": {
+            "n": 151,
+            "accuracy": 0.5231788079470199,
+            "precision": 0.55,
+            "recall": 0.2894736842105263,
+            "f1": 0.3793103448275862,
+            "roc_auc": 0.6154385964912281,
+            "confusion_matrix": [
+              [
+                57,
+                18
+              ],
+              [
+                54,
+                22
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "rule_evaluation_note": "Frozen rules were tuned on the previous MAGE split; their metrics are descriptive, not an independent holdout."
+  },
+  "previous_published_commit": "95d94a6c477dba09da587bc620b6eb1d6142bc21",
+  "baseline_note": "The C=10 reference is freshly refitted using two-thread training control; its numerical solver path differs slightly from the previously published model. Previous published metrics are preserved separately and have identical data, features and split IDs."
 }
