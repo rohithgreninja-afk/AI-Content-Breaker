@@ -102,6 +102,10 @@ def _first(answers) -> str | None:
             answers = ast.literal_eval(answers)
         except (ValueError, SyntaxError):
             return answers or None
+        if isinstance(answers, str):
+            return answers or None
+    if not isinstance(answers, (list, tuple)):
+        return None
     return next((answer for answer in (answers or [])
                  if isinstance(answer, str) and answer.strip()), None)
 
@@ -241,6 +245,8 @@ def fetch_pool(name: str) -> list[dict]:
             metadata = json.load(handle)
         if any(metadata.get(key) != value for key, value in identity.items()):
             raise RuntimeError(f"{name}: cache identity differs from pinned source")
+        if metadata.get("pool_sha256") and metadata["pool_sha256"] != file_sha256(path):
+            raise RuntimeError(f"{name}: cached pool digest does not match metadata")
         completed = set(metadata.get("completed_offsets", []))
         for offset in completed:
             if not all(i in have for i in range(offset, offset + BLOCK_LEN)):
@@ -253,8 +259,22 @@ def fetch_pool(name: str) -> list[dict]:
         completed = {offset for offset in offsets
                      if all(i in have for i in range(offset, offset + BLOCK_LEN))}
         expected = {i for offset in offsets for i in range(offset, offset + BLOCK_LEN)}
-        if rows and (len(completed) != len(offsets) or have != expected):
+        if rows and len(completed) != len(offsets):
             raise RuntimeError("legacy MAGE cache is not the complete seeded sample")
+        if have - expected:
+            # An abandoned fetch with a different seed may have appended extra
+            # rows. Keep exactly the original deterministic complete sample.
+            rows = [row for row in rows if row["row_idx"] in expected]
+            have = expected
+            fd, temporary = tempfile.mkstemp(dir=DATA_DIR, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for row in rows:
+                        handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.remove(temporary)
     metadata = {**identity, "completed_offsets": sorted(completed)}
     _atomic_json(metadata, metadata_path)
     todo = [offset for offset in offsets if offset not in completed]
@@ -306,7 +326,28 @@ def _cut(row: list, n_words: int) -> list:
     return row[:4] + [" ".join(row[4].split()[:n_words])]
 
 
-def collect(name: str, pool: list[dict]) -> list[list]:
+def _text_key(text: str) -> str:
+    return hashlib.sha256(" ".join(text.casefold().split()).encode("utf-8")).hexdigest()
+
+
+def natural_group(name: str, row: dict, text: str) -> str:
+    """Keep multiple outputs from one original document in the same split."""
+    if name == "hc3":
+        key = str(row.get("id") or _text_key(str(row.get("question", ""))))
+    elif name == "wiki":
+        key = str(row.get("id") or row.get("title") or row["row_idx"])
+    elif name == "raid":
+        key = str(row.get("source_id") or row.get("id") or row["row_idx"])
+    else:
+        # MAGE does not expose the original document ID. Continuations often
+        # share their opening with the human text or other generators.
+        key = _text_key(" ".join(text.split()[:20]))
+    return f"{name}:{key}"
+
+
+def collect(name: str, pool: list[dict],
+            row_groups: dict[str, str] | None = None,
+            group_links: list[tuple[str, str]] | None = None) -> list[list]:
     """Balance and length-match one source's pool, domain by domain.
 
     Within each domain the classes get equal counts (so the domain says
@@ -318,10 +359,24 @@ def collect(name: str, pool: list[dict]) -> list[list]:
     cells: dict[tuple[str, str], list[list]] = {}
     for row in pool:
         for index, (label, model, domain, text) in enumerate(mapper(row)):
-            text = " ".join(str(text).split())
+            if label not in ("human", "ai"):
+                raise ValueError(f"invalid {name} label: {label!r}")
+            if (not isinstance(text, str) or not isinstance(domain, str)
+                    or not domain.strip() or not model):
+                continue
+            text = " ".join(text.split())
+            row_id = f"{name}-{row['row_idx']}-{index}"
+            group = natural_group(name, row, text)
+            if row_groups is not None:
+                row_groups[row_id] = group
+            # Link every raw document before balancing or deduplication. This
+            # catches shared prompts across corpora (e.g. MAGE/HC3 ELI5), and
+            # preserves chains through records that are not finally selected.
+            if group_links is not None and len(text.split()) >= 20:
+                prefix = _text_key(" ".join(text.split()[:20]))
+                group_links.append((group, "prefix:" + prefix))
             if not is_clean(text):
                 continue
-            row_id = f"{name}-{row['row_idx']}-{index}"
             cells.setdefault((domain, label), []).append(
                 [row_id, model, label, f"{name}:{domain}", text])
 
@@ -344,12 +399,101 @@ def collect(name: str, pool: list[dict]) -> list[list]:
 
 
 def write_csv(rows_out: list, path: str) -> None:
-    """Write the subset using the frozen column contract."""
+    """Atomically write the subset using the frozen column contract."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["id", "model", "label", "domain", "text"])
-        writer.writerows(rows_out)
+    fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["id", "model", "label", "domain", "text"])
+            writer.writerows(rows_out)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
+
+
+def deduplicate_pairs(rows: list[list], natural_groups: dict[str, str],
+                      group_links: list[tuple[str, str]] = ()
+                      ) -> tuple[list[list], dict[str, str], int]:
+    """Deduplicate after truncation, dropping complete matched pairs.
+
+    Union source groups through each length-matched pair so related outputs
+    and their matching partners can never straddle evaluation splits.
+    """
+    parents: dict[str, str] = {}
+
+    def find(key: str) -> str:
+        parents.setdefault(key, key)
+        while parents[key] != key:
+            parents[key] = parents[parents[key]]
+            key = parents[key]
+        return key
+
+    def union(left: str, right: str) -> None:
+        left, right = find(left), find(right)
+        if left != right:
+            parents[max(left, right)] = min(left, right)
+
+    for left, right in group_links:
+        union(left, right)
+    seen: dict[str, str] = {}
+    retained: list[list] = []
+    dropped = 0
+    if len(rows) % 2:
+        raise ValueError("balanced rows must contain complete human/AI pairs")
+    for i in range(0, len(rows), 2):
+        human, ai = rows[i:i + 2]
+        if (human[2] != "human" or ai[2] != "ai" or human[3] != ai[3]
+                or len(human[4].split()) != len(ai[4].split())):
+            raise ValueError("invalid length-matched pair")
+        left, right = _text_key(human[4]), _text_key(ai[4])
+        human_group, ai_group = natural_groups[human[0]], natural_groups[ai[0]]
+        union(human_group, ai_group)
+        for key, group in ((left, human_group), (right, ai_group)):
+            if key in seen:
+                union(group, seen[key])
+        if left == right or left in seen or right in seen:
+            dropped += 1
+            continue
+        seen.update({left: human_group, right: ai_group})
+        retained.extend((human, ai))
+    return retained, {row[0]: find(natural_groups[row[0]]) for row in retained}, dropped
+
+
+def write_manifest(rows: list[list], row_groups: dict[str, str],
+                   names: list[str], dropped_pairs: int) -> dict:
+    """Record source provenance and the exact CSV-to-evaluation-group map."""
+    sources = {}
+    for name in names:
+        dataset, config, split, revision, n_blocks, _ = SOURCES[name]
+        pool_path = os.path.join(DATA_DIR, f"{name}_pool.jsonl")
+        metadata_path = os.path.join(DATA_DIR, f"{name}_pool.meta.json")
+        with open(metadata_path, encoding="utf-8") as handle:
+            metadata = json.load(handle)
+        selected = [row for row in rows if row[3].startswith(name + ":")]
+        sources[name] = {
+            "dataset": dataset, "url": f"https://huggingface.co/datasets/{dataset}",
+            "config": config, "split": split, "revision": revision,
+            "blocks": n_blocks, "pool_rows": metadata["pool_rows"],
+            "pool_sha256": file_sha256(pool_path),
+            "api_num_rows_total": metadata["num_rows_total"],
+            "api_partial": metadata["partial"], "rows": len(selected),
+            "labels": dict(Counter(row[2] for row in selected)),
+            "domains": dict(sorted(Counter(row[3] for row in selected).items())),
+        }
+    manifest = {
+        "schema_version": 1, "csv_path": "data/train_clean.csv",
+        "csv_sha256": file_sha256(OUT), "rows": len(rows),
+        "seed": SEED, "min_words": MIN_WORDS, "max_words": MAX_WORDS,
+        "max_pairs_per_domain": PER_CELL,
+        "duplicate_pairs_dropped": dropped_pairs,
+        "labels": dict(Counter(row[2] for row in rows)), "sources": sources,
+        "grouping": "natural source IDs, length-matched pairs, and globally shared normalized first 20 words from all raw documents",
+        "row_groups": row_groups,
+    }
+    _atomic_json(manifest, os.path.join(DATA_DIR, "train_manifest.json"))
+    return manifest
 
 
 def label_counts(path: str) -> dict:
@@ -368,13 +512,18 @@ def main(argv: list[str] | None = None) -> None:
     if "--only" in argv:
         names = argv[argv.index("--only") + 1].split(",")
     rows_out: list[list] = []
+    natural_groups: dict[str, str] = {}
+    group_links: list[tuple[str, str]] = []
     for name in names:
         check_revision(name)
         pool = fetch_pool(name)
         print(f"{name}: pool {len(pool)} rows", flush=True)
-        rows_out.extend(collect(name, pool))
+        rows_out.extend(collect(name, pool, natural_groups, group_links))
+    rows_out, row_groups, dropped_pairs = deduplicate_pairs(
+        rows_out, natural_groups, group_links)
     random.Random(SEED).shuffle(rows_out)
     write_csv(rows_out, OUT)
+    write_manifest(rows_out, row_groups, names, dropped_pairs)
     by_source = Counter(row[3].split(":")[0] for row in rows_out)
     print(f"\ntotal rows: {len(rows_out)} {dict(by_source)}", flush=True)
     print(f"label counts: {label_counts(OUT)}", flush=True)
