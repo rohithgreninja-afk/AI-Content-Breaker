@@ -1,0 +1,163 @@
+{
+  "dataset_sha256": "90ff8f5fd8191835edf3efacde8a8fd50942d87e94927daa937e8981ce87b9b8",
+  "n_rows": 4734,
+  "labels": {
+    "ai": 2367,
+    "human": 2367
+  },
+  "n_domains": 10,
+  "n_generators": 27,
+  "tagger": "nltk",
+  "coefficient_max_abs_difference": 0.0,
+  "scaler_mean_max_abs_difference": 0.0,
+  "exact_unique_texts": 4734,
+  "grouping": "sha256 of first 20 lowercased whitespace-separated tokens",
+  "original_split": {
+    "n_test": 1184,
+    "accuracy": 0.6342905405405406,
+    "roc_auc": 0.6872688778305334,
+    "confusion_matrix": [
+      [
+        411,
+        181
+      ],
+      [
+        252,
+        340
+      ]
+    ],
+    "rules_accuracy": 0.53125,
+    "at_least_50_words": {
+      "n": 752,
+      "accuracy": 0.6888297872340425,
+      "rules_accuracy": 0.5611702127659575
+    },
+    "train_accuracy": 0.6754929577464789,
+    "cv_mean": 0.6526760563380283,
+    "cv_std": 0.0148683303891793,
+    "method": "stratified random row split",
+    "test_fraction": 0.25,
+    "random_state": 42,
+    "n_train": 3550,
+    "C": 30.0,
+    "cv_folds": 5
+  },
+  "prefix_20_audit": {
+    "duplicate_groups": 356,
+    "cross_split_groups": 133,
+    "cross_split_test_rows": 139
+  },
+  "prefix_30_audit": {
+    "duplicate_groups": 329,
+    "cross_split_groups": 123,
+    "cross_split_test_rows": 128
+  },
+  "prefix_50_audit": {
+    "duplicate_groups": 1,
+    "cross_split_groups": 0,
+    "cross_split_test_rows": 0
+  },
+  "grouped_split": {
+    "n_test": 1183,
+    "accuracy": 0.6796280642434489,
+    "roc_auc": 0.7339827136781453,
+    "confusion_matrix": [
+      [
+        437,
+        154
+      ],
+      [
+        225,
+        367
+      ]
+    ],
+    "at_least_50_words": {
+      "n": 728,
+      "accuracy": 0.7239010989010989,
+      "frozen_mage_rules_accuracy": 0.5576923076923077
+    },
+    "n_train": 3551,
+    "train_accuracy": 0.6674176288369473,
+    "cv_mean": 0.6378428549791066,
+    "cv_std": 0.008080583102304315,
+    "shared_train_test_groups": 0,
+    "test_rows_used_by_frozen_rules_original_training": 885,
+    "method": "diagnostic first fold of StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=42)",
+    "C": 30.0,
+    "cv_method": "StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42) on training rows only",
+    "frozen_mage_rules_accuracy": 0.5494505494505495
+  },
+  "audit_date": "2026-10-20",
+  "source_revision": "342663f0a2b775455c023f5d36a1341ff0ec5402",
+  "dataset_path": "data/mage_clean.csv",
+  "model_path": "models/m5_logreg.joblib (pre-expansion artifact)",
+  "model_sha256": "fad0eac573c78fa48bcb155d0f83fb302a369d20e8a08c2ebf9e198aadfd017e",
+  "environment": {
+    "python": "3.14.7",
+    "numpy": "2.5.4",
+    "scikit-learn": "1.9.1",
+    "nltk": "3.10.3",
+    "joblib": "1.6.0"
+  },
+  "per_domain": {
+    "cmv": {
+      "human": 200,
+      "ai": 200,
+      "length_histograms_identical": true
+    },
+    "eli5": {
+      "human": 300,
+      "ai": 300,
+      "length_histograms_identical": true
+    },
+    "hswag": {
+      "human": 68,
+      "ai": 68,
+      "length_histograms_identical": true
+    },
+    "roct": {
+      "human": 300,
+      "ai": 300,
+      "length_histograms_identical": true
+    },
+    "sci_gen": {
+      "human": 300,
+      "ai": 300,
+      "length_histograms_identical": true
+    },
+    "squad": {
+      "human": 300,
+      "ai": 300,
+      "length_histograms_identical": true
+    },
+    "tldr": {
+      "human": 156,
+      "ai": 156,
+      "length_histograms_identical": true
+    },
+    "wp": {
+      "human": 279,
+      "ai": 279,
+      "length_histograms_identical": true
+    },
+    "xsum": {
+      "human": 164,
+      "ai": 164,
+      "length_histograms_identical": true
+    },
+    "yelp": {
+      "human": 300,
+      "ai": 300,
+      "length_histograms_identical": true
+    }
+  },
+  "conclusion": "Original MAGE optimizer fit, scaler, labels, balancing and reported metrics reproduce exactly. Evaluation needs prompt-group isolation before expanding training.",
+  "limitations": [
+    "Original row-wise held-out split shares 20-word prompt prefixes with training rows; original numbers are reproduced historical metrics, not a prompt-isolated generalization claim.",
+    "The diagnostic grouped split uses a different holdout; metric differences do not establish an improvement.",
+    "Frozen MAGE rule thresholds were tuned on the original training split: 885 rows in the diagnostic grouped holdout overlap that old training set. Grouped rule scores are comparisons, not held-out rule estimates.",
+    "Prefix grouping is a heuristic because raw sampled MAGE rows have no prompt IDs. It cannot establish complete semantic independence.",
+    "The original model bundle has no dataset digest, split IDs or tagger provenance. Equality was independently checked against the preserved original CSV and current nltk features.",
+    "No model or dataset artifact was modified by this audit."
+  ]
+}
