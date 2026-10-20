@@ -219,6 +219,54 @@ class TestPredeclaredSelectionPolicy(unittest.TestCase):
                     training.validate_protocol(changed)
 
 
+class TestSelectionWordGateEdges(unittest.TestCase):
+    @staticmethod
+    def data():
+        indices = np.arange(10)
+        return {"X": np.column_stack((indices, indices % 2)).astype(float),
+                "y": indices % 2,
+                "groups": np.asarray([f"pair-{index // 2}" for index in indices]),
+                "ids": np.asarray([f"train-{index}" for index in indices]),
+                "words": np.full(10, 60), "sources": np.asarray(["mage"] * 10)}
+
+    def test_no_gated_training_rows_fails_before_folds_or_fitting(self):
+        data = self.data()
+        data["words"][:] = 49
+        with patch.object(training, "build_estimator") as factory, \
+                patch.object(training, "_cv_indices") as folds:
+            with self.assertRaisesRegex(ValueError, "no training texts pass the fixed word gate"):
+                training.select_candidates(data, protocol())
+            factory.return_value.fit.assert_not_called()
+            folds.assert_not_called()
+
+    def test_empty_gated_validation_fold_is_reported_without_changing_gate(self):
+        data = self.data()
+        data["words"][:2] = 49
+        folds = [(np.asarray([index for index in range(10) if index // 2 != fold]),
+                  np.asarray([2 * fold, 2 * fold + 1])) for fold in range(5)]
+
+        class ToyEstimator:
+            def fit(self, vectors, labels):
+                return self
+
+            def predict_proba(self, vectors):
+                positive = np.where(vectors[:, 1] == 1, 0.9, 0.1)
+                return np.column_stack((1 - positive, positive))
+
+        policy = protocol()
+        policy["candidates"] = policy["candidates"][:1]
+        output = io.StringIO()
+        with patch.object(training, "_cv_indices", return_value=folds), \
+                patch.object(training, "build_estimator", side_effect=lambda config: ToyEstimator()), \
+                redirect_stdout(output):
+            selection = training.select_candidates(data, policy)
+        self.assertIn("n/a (no gated rows)", output.getvalue())
+        first_fold = selection["candidates"][0]["fold_metrics"][0]
+        self.assertIsNone(first_fold["at_least_50_words"]["accuracy"])
+        self.assertEqual(selection["n_scored_training_rows"], 8)
+        self.assertEqual(selection["candidates"][0]["metrics"]["at_least_50_words"]["n"], 8)
+
+
 class TestFinalizeSelectionBoundary(unittest.TestCase):
     """Reject changed experiment records before training or touching test text."""
 
