@@ -1097,7 +1097,7 @@ code {
   overflow-wrap: anywhere;
 }
 .feature-list {
-  font-size: 9px;
+  font-size: 12px;
 }
 .feature-list > div {
   display: flex;
@@ -1130,7 +1130,7 @@ table {
   width: 100%;
   text-align: left;
   border-collapse: collapse;
-  font-size: 9px;
+  font-size: 12px;
 }
 th {
   font-weight: 400;
@@ -1596,9 +1596,6 @@ td {
   }
   .stage-body {
     padding-inline: 16px;
-  }
-  .feature-list {
-    font-size: 8px;
   }
   .parser-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
