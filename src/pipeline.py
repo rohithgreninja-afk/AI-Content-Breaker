@@ -298,6 +298,8 @@ def evaluate_test_split() -> None:
           f"({abstained['ai']} ai, {abstained['human']} human); "
           f"scoring the other {len(truth)}")
     _report("M5a rules", rule_scores, truth)
+    print("M5a is a frozen MAGE comparison; its historical tuning rows may "
+          "overlap this holdout.")
     model, note = _model()
     if model is None:
         print(f"M5b model: {note}")
