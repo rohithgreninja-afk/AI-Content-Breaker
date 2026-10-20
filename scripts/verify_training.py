@@ -67,6 +67,9 @@ def verify() -> dict:
     train = [by_id[row_id] for row_id in model.metadata["train_ids"]]
     test = [by_id[row["id"]] for row in heldout]
     C = report["metrics"]["C"]
+    classifier = model.pipeline.named_steps["logreg"]
+    if int(classifier.n_iter_.max()) >= classifier.max_iter:
+        raise ValueError("saved classifier reached its iteration limit; retrain to convergence")
     refitted = ModelScorer._build_pipeline(C=C)
     refitted.fit(X[train], y[train])
     differences = {}
@@ -117,7 +120,9 @@ def verify() -> dict:
         "checks": {"finite_features": True, "exact_duplicates": 0,
                    "shared_prefixes_across_groups": 0, "train_test_group_overlap": 0,
                    "per_domain_class_and_length_balance": True,
-                   "model_report_metrics_match": True},
+                   "model_report_metrics_match": True, "solver_converged": True},
+        "solver_iterations": int(classifier.n_iter_.max()),
+        "solver_max_iterations": classifier.max_iter,
         "refit_parameter_max_abs_differences": differences,
         "same_holdout_comparison": comparison,
         "comparison_note": "MAGE-only comparison refits C=30 on MAGE rows in the final "
