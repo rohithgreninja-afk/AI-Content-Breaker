@@ -413,7 +413,7 @@ def runtime_versions() -> dict:
     import platform
 
     packages = {name: importlib.metadata.version(name)
-                for name in ("scikit-learn", "nltk", "numpy", "joblib", "requests")}
+                for name in ("scikit-learn", "nltk", "numpy", "joblib", "requests", "pyarrow")}
     return {"python": platform.python_version(), **packages}
 
 
