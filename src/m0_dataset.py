@@ -36,10 +36,12 @@ from __future__ import annotations
 
 import ast
 import csv
+import hashlib
 import json
 import os
 import random
 import sys
+import tempfile
 import time
 from collections import Counter
 
@@ -86,6 +88,8 @@ def parse_src(src: str) -> tuple[str, str]:
 
 def map_mage(row: dict) -> list[tuple]:
     """MAGE labels are 1 = human, 0 = machine."""
+    if row.get("label") not in (0, 1, "0", "1"):
+        raise ValueError(f"invalid MAGE label: {row.get('label')!r}")
     domain, model = parse_src(row["src"])
     label = "human" if int(row["label"]) == 1 else "ai"
     return [(label, model, domain, row["text"])]
@@ -98,7 +102,8 @@ def _first(answers) -> str | None:
             answers = ast.literal_eval(answers)
         except (ValueError, SyntaxError):
             return answers or None
-    return answers[0] if answers else None
+    return next((answer for answer in (answers or [])
+                 if isinstance(answer, str) and answer.strip()), None)
 
 
 def map_hc3(row: dict) -> list[tuple]:
@@ -121,7 +126,8 @@ def map_wiki(row: dict) -> list[tuple]:
 
 def map_raid(row: dict) -> list[tuple]:
     """Unattacked RAID rows only; model "human" marks human text."""
-    if row.get("attack") != "none" or not row.get("generation"):
+    if (row.get("attack") != "none" or not row.get("generation")
+            or not row.get("model") or not row.get("domain")):
         return []
     label = "human" if row["model"] == "human" else "ai"
     return [(label, row["model"], row["domain"], row["generation"])]
@@ -146,7 +152,7 @@ SOURCES = {
 # --------------------------------------------------------------------------
 
 def _get_rows(dataset: str, config: str, split: str, offset: int,
-              length: int) -> dict:
+              length: int, revision: str | None = None) -> dict:
     """One rows-API call, with backoff on rate limits and server errors."""
     params = {"dataset": dataset, "config": config, "split": split,
               "offset": offset, "length": length}
@@ -154,6 +160,11 @@ def _get_rows(dataset: str, config: str, split: str, offset: int,
         try:
             response = requests.get(ROWS_API, params=params, timeout=90)
             if response.status_code == 200:
+                if revision and response.headers.get("x-revision") != revision:
+                    raise RuntimeError(
+                        f"{dataset}: rows API revision "
+                        f"{response.headers.get('x-revision')!r} does not match "
+                        f"pinned {revision}; refusing to mix dataset versions")
                 return response.json()
             status = response.status_code
         except requests.RequestException as error:
@@ -167,19 +178,37 @@ def _get_rows(dataset: str, config: str, split: str, offset: int,
 
 
 def check_revision(name: str) -> None:
-    """Warn when the hub has moved past the pinned revision.
-
-    The rows API always serves the live revision, so a moved dataset can
-    change the sample even with the same seed.
-    """
+    """Fail closed if the live rows API cannot serve the pinned dataset."""
     dataset, _, _, revision, _, _ = SOURCES[name]
     try:
-        live = requests.get(INFO_API + dataset, timeout=30).json().get("sha")
-    except requests.RequestException:
-        return
-    if live and live != revision:
-        print(f"warning: {dataset} is now at {live}, pinned {revision}",
-              flush=True)
+        response = requests.get(INFO_API + dataset, timeout=30)
+        response.raise_for_status()
+        live = response.json().get("sha")
+    except (requests.RequestException, ValueError) as error:
+        raise RuntimeError(f"cannot verify {dataset} revision") from error
+    if live != revision:
+        raise RuntimeError(f"{dataset} is at {live}, expected pinned {revision}")
+
+
+def file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _atomic_json(value: dict, path: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
 
 
 def fetch_pool(name: str) -> list[dict]:
@@ -188,38 +217,75 @@ def fetch_pool(name: str) -> list[dict]:
     The pool is appended block by block, so an interrupted run resumes where
     it stopped instead of re-reading everything.
     """
-    dataset, config, split, _, n_blocks, _ = SOURCES[name]
+    dataset, config, split, revision, n_blocks, _ = SOURCES[name]
     path = os.path.join(DATA_DIR, f"{name}_pool.jsonl")
+    metadata_path = os.path.join(DATA_DIR, f"{name}_pool.meta.json")
     rows: list[dict] = []
     if os.path.exists(path):
         with open(path, encoding="utf-8") as handle:
             rows = [json.loads(line) for line in handle]
     have = {row["row_idx"] for row in rows}
 
-    total = int(_get_rows(dataset, config, split, 0, 1)["num_rows_total"])
+    info = _get_rows(dataset, config, split, 0, 1, revision)
+    total = int(info["num_rows_total"])
     # Same seed for every source: offsets differ anyway because the sizes do,
     # and it keeps the original MAGE pool's offsets valid.
     rng = random.Random(SEED)
     offsets = sorted(rng.sample(range(0, total - BLOCK_LEN), n_blocks))
-    todo = [offset for offset in offsets if offset not in have]
+    identity = {"dataset": dataset, "config": config, "split": split,
+                "revision": revision, "num_rows_total": total,
+                "partial": bool(info.get("partial", False)),
+                "seed": SEED, "block_length": BLOCK_LEN}
+    if os.path.exists(metadata_path):
+        with open(metadata_path, encoding="utf-8") as handle:
+            metadata = json.load(handle)
+        if any(metadata.get(key) != value for key, value in identity.items()):
+            raise RuntimeError(f"{name}: cache identity differs from pinned source")
+        completed = set(metadata.get("completed_offsets", []))
+        for offset in completed:
+            if not all(i in have for i in range(offset, offset + BLOCK_LEN)):
+                raise RuntimeError(f"{name}: cache is missing rows from block {offset}")
+    else:
+        # The existing MAGE cache predates metadata. Adopt it only when its
+        # complete seeded sample is present and both hub/API revisions match.
+        if rows and name != "mage":
+            raise RuntimeError(f"{name}: nonempty legacy cache lacks provenance")
+        completed = {offset for offset in offsets
+                     if all(i in have for i in range(offset, offset + BLOCK_LEN))}
+        expected = {i for offset in offsets for i in range(offset, offset + BLOCK_LEN)}
+        if rows and (len(completed) != len(offsets) or have != expected):
+            raise RuntimeError("legacy MAGE cache is not the complete seeded sample")
+    metadata = {**identity, "completed_offsets": sorted(completed)}
+    _atomic_json(metadata, metadata_path)
+    todo = [offset for offset in offsets if offset not in completed]
     if todo:
         print(f"{name}: fetching {len(todo)} of {n_blocks} blocks from "
               f"{total} rows ...", flush=True)
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(path, "a", encoding="utf-8") as handle:
         for i, offset in enumerate(todo, 1):
-            page = _get_rows(dataset, config, split, offset, BLOCK_LEN)
-            for item in page.get("rows", []):
+            page = _get_rows(dataset, config, split, offset, BLOCK_LEN, revision)
+            page_rows = page.get("rows", [])
+            if {item["row_idx"] for item in page_rows} != set(range(offset, offset + BLOCK_LEN)):
+                raise RuntimeError(f"{name}: incomplete API block at {offset}")
+            for item in page_rows:
                 if item["row_idx"] not in have:  # blocks can overlap
                     have.add(item["row_idx"])
                     row = {"row_idx": item["row_idx"], **item["row"]}
                     rows.append(row)
                     handle.write(json.dumps(row, ensure_ascii=False) + "\n")
             handle.flush()
-            if i % 20 == 0:
+            os.fsync(handle.fileno())
+            completed.add(offset)
+            metadata["completed_offsets"] = sorted(completed)
+            _atomic_json(metadata, metadata_path)
+            if i % 10 == 0 or i == len(todo):
                 print(f"  {name}: {i}/{len(todo)} blocks, {len(rows)} rows",
                       flush=True)
             time.sleep(REQUEST_GAP)
+    metadata["pool_sha256"] = file_sha256(path)
+    metadata["pool_rows"] = len(rows)
+    _atomic_json(metadata, metadata_path)
     return rows
 
 
