@@ -1,0 +1,416 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-20T16:47:17.265Z",
+  "title": "Design System: AI Content Breaker",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "White",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Cool gray",
+        "tonalRamp": [
+          "oklch(15.00% 0.00287 264.54)",
+          "oklch(26.43% 0.00287 264.54)",
+          "oklch(37.86% 0.00287 264.54)",
+          "oklch(49.29% 0.00287 264.54)",
+          "oklch(60.71% 0.00287 264.54)",
+          "oklch(72.14% 0.00287 264.54)",
+          "oklch(83.57% 0.00287 264.54)",
+          "oklch(95.00% 0.00287 264.54)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Slate ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.03582 249.03)",
+          "oklch(26.43% 0.03582 249.03)",
+          "oklch(37.86% 0.03582 249.03)",
+          "oklch(49.29% 0.03582 249.03)",
+          "oklch(60.71% 0.03582 249.03)",
+          "oklch(72.14% 0.03582 249.03)",
+          "oklch(83.57% 0.03582 249.03)",
+          "oklch(95.00% 0.03582 249.03)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted slate",
+        "tonalRamp": [
+          "oklch(15.00% 0.02760 254.07)",
+          "oklch(26.43% 0.02760 254.07)",
+          "oklch(37.86% 0.02760 254.07)",
+          "oklch(49.29% 0.02760 254.07)",
+          "oklch(60.71% 0.02760 254.07)",
+          "oklch(72.14% 0.02760 254.07)",
+          "oklch(83.57% 0.02760 254.07)",
+          "oklch(95.00% 0.02760 254.07)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Light gray",
+        "tonalRamp": [
+          "oklch(15.00% 0.00804 253.86)",
+          "oklch(26.43% 0.00804 253.86)",
+          "oklch(37.86% 0.00804 253.86)",
+          "oklch(49.29% 0.00804 253.86)",
+          "oklch(60.71% 0.00804 253.86)",
+          "oklch(72.14% 0.00804 253.86)",
+          "oklch(83.57% 0.00804 253.86)",
+          "oklch(95.00% 0.00804 253.86)"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Deep blue",
+        "tonalRamp": [
+          "oklch(15.00% 0.06621 243.01)",
+          "oklch(26.43% 0.06621 243.01)",
+          "oklch(37.86% 0.06621 243.01)",
+          "oklch(49.29% 0.06621 243.01)",
+          "oklch(60.71% 0.06621 243.01)",
+          "oklch(72.14% 0.06621 243.01)",
+          "oklch(83.57% 0.06621 243.01)",
+          "oklch(95.00% 0.06621 243.01)"
+        ]
+      },
+      "blue-hover": {
+        "role": "primary",
+        "displayName": "Deep blue hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.06065 244.17)",
+          "oklch(26.43% 0.06065 244.17)",
+          "oklch(37.86% 0.06065 244.17)",
+          "oklch(49.29% 0.06065 244.17)",
+          "oklch(60.71% 0.06065 244.17)",
+          "oklch(72.14% 0.06065 244.17)",
+          "oklch(83.57% 0.06065 244.17)",
+          "oklch(95.00% 0.06065 244.17)"
+        ]
+      },
+      "blue-wash": {
+        "role": "primary",
+        "displayName": "Pale blue",
+        "tonalRamp": [
+          "oklch(15.00% 0.00932 242.84)",
+          "oklch(26.43% 0.00932 242.84)",
+          "oklch(37.86% 0.00932 242.84)",
+          "oklch(49.29% 0.00932 242.84)",
+          "oklch(60.71% 0.00932 242.84)",
+          "oklch(72.14% 0.00932 242.84)",
+          "oklch(83.57% 0.00932 242.84)",
+          "oklch(95.00% 0.00932 242.84)"
+        ]
+      },
+      "ochre": {
+        "role": "secondary",
+        "displayName": "Ochre",
+        "tonalRamp": [
+          "oklch(15.00% 0.10974 78.67)",
+          "oklch(26.43% 0.10974 78.67)",
+          "oklch(37.86% 0.10974 78.67)",
+          "oklch(49.29% 0.10974 78.67)",
+          "oklch(60.71% 0.10974 78.67)",
+          "oklch(72.14% 0.10974 78.67)",
+          "oklch(83.57% 0.10974 78.67)",
+          "oklch(95.00% 0.10974 78.67)"
+        ]
+      },
+      "ochre-wash": {
+        "role": "secondary",
+        "displayName": "Pale ochre",
+        "tonalRamp": [
+          "oklch(15.00% 0.02289 84.59)",
+          "oklch(26.43% 0.02289 84.59)",
+          "oklch(37.86% 0.02289 84.59)",
+          "oklch(49.29% 0.02289 84.59)",
+          "oklch(60.71% 0.02289 84.59)",
+          "oklch(72.14% 0.02289 84.59)",
+          "oklch(83.57% 0.02289 84.59)",
+          "oklch(95.00% 0.02289 84.59)"
+        ]
+      },
+      "green": {
+        "role": "success",
+        "displayName": "Status green",
+        "tonalRamp": [
+          "oklch(15.00% 0.07128 165.31)",
+          "oklch(26.43% 0.07128 165.31)",
+          "oklch(37.86% 0.07128 165.31)",
+          "oklch(49.29% 0.07128 165.31)",
+          "oklch(60.71% 0.07128 165.31)",
+          "oklch(72.14% 0.07128 165.31)",
+          "oklch(83.57% 0.07128 165.31)",
+          "oklch(95.00% 0.07128 165.31)"
+        ]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Error red",
+        "tonalRamp": [
+          "oklch(15.00% 0.14027 26.71)",
+          "oklch(26.43% 0.14027 26.71)",
+          "oklch(37.86% 0.14027 26.71)",
+          "oklch(49.29% 0.14027 26.71)",
+          "oklch(60.71% 0.14027 26.71)",
+          "oklch(72.14% 0.14027 26.71)",
+          "oklch(83.57% 0.14027 26.71)",
+          "oklch(95.00% 0.14027 26.71)"
+        ]
+      },
+      "scroll-thumb": {
+        "role": "neutral",
+        "displayName": "Scrollbar thumb",
+        "tonalRamp": [
+          "oklch(15.00% 0.01792 248.05)",
+          "oklch(26.43% 0.01792 248.05)",
+          "oklch(37.86% 0.01792 248.05)",
+          "oklch(49.29% 0.01792 248.05)",
+          "oklch(60.71% 0.01792 248.05)",
+          "oklch(72.14% 0.01792 248.05)",
+          "oklch(83.57% 0.01792 248.05)",
+          "oklch(95.00% 0.01792 248.05)"
+        ]
+      },
+      "scroll-track": {
+        "role": "neutral",
+        "displayName": "Scrollbar track",
+        "tonalRamp": [
+          "oklch(15.00% 0.00515 247.88)",
+          "oklch(26.43% 0.00515 247.88)",
+          "oklch(37.86% 0.00515 247.88)",
+          "oklch(49.29% 0.00515 247.88)",
+          "oklch(60.71% 0.00515 247.88)",
+          "oklch(72.14% 0.00515 247.88)",
+          "oklch(83.57% 0.00515 247.88)",
+          "oklch(95.00% 0.00515 247.88)"
+        ]
+      },
+      "scroll-hover": {
+        "role": "neutral",
+        "displayName": "Scrollbar hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.02807 244.64)",
+          "oklch(26.43% 0.02807 244.64)",
+          "oklch(37.86% 0.02807 244.64)",
+          "oklch(49.29% 0.02807 244.64)",
+          "oklch(60.71% 0.02807 244.64)",
+          "oklch(72.14% 0.02807 244.64)",
+          "oklch(83.57% 0.02807 244.64)",
+          "oklch(95.00% 0.02807 244.64)"
+        ]
+      },
+      "scroll-active": {
+        "role": "neutral",
+        "displayName": "Scrollbar active",
+        "tonalRamp": [
+          "oklch(15.00% 0.04064 243.55)",
+          "oklch(26.43% 0.04064 243.55)",
+          "oklch(37.86% 0.04064 243.55)",
+          "oklch(49.29% 0.04064 243.55)",
+          "oklch(60.71% 0.04064 243.55)",
+          "oklch(72.14% 0.04064 243.55)",
+          "oklch(83.57% 0.04064 243.55)",
+          "oklch(95.00% 0.04064 243.55)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Page title",
+        "purpose": "Manrope title; the fixed frontmatter size is its CSS clamp maximum."
+      },
+      "title": {
+        "displayName": "Panel heading",
+        "purpose": "Compact Manrope section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "IBM Plex Sans page guidance and reading text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Model and field labels."
+      },
+      "button": {
+        "displayName": "Action",
+        "purpose": "IBM Plex Sans buttons and action text."
+      },
+      "mono": {
+        "displayName": "Technical values",
+        "purpose": "Regular IBM Plex Mono values, identifiers, feature names, and code."
+      },
+      "data": {
+        "purpose": "Feature names, feature values, and scoring table values use regular IBM Plex Mono at 12px on desktop and mobile.",
+        "displayName": "Report data"
+      }
+    },
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "150ms ease",
+        "purpose": "Button colors and borders; disclosure rotation."
+      },
+      {
+        "name": "spinner",
+        "value": "1s linear infinite",
+        "purpose": "Only active request and training indicators."
+      },
+      {
+        "name": "analysis-pulse",
+        "value": "1.8s ease-in-out infinite",
+        "purpose": "Analysis rail and initial loading mark; removed with reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-min",
+        "value": "1600px"
+      },
+      {
+        "name": "compact-max",
+        "value": "1280px"
+      },
+      {
+        "name": "stacked-max",
+        "value": "1060px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "700px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Analyze text",
+      "kind": "button",
+      "refersTo": "button-analyze",
+      "description": "Full-width primary action with a fixed busy-state height.",
+      "html": "<button class=\"ds-analyze\"><span><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 5 12 7-12 7V5Z\" fill=\"currentColor\"/></svg>Analyze text</span><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-analyze{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:6px;font-family:'IBM Plex Sans Variable',sans-serif;font-weight:500;cursor:pointer;transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease;justify-content:space-between;background:var(--blue,#244b68);color:var(--paper,#fff);width:100%;height:43px;padding:0 15px;font-size:13px}.ds-analyze>span{display:flex;align-items:center;gap:9px}.ds-analyze:hover:not(:disabled){background:var(--blue-hover,#183a54)}.ds-analyze:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-analyze:active:not(:disabled){transform:translateY(1px)}.ds-analyze:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-analyze{transition:none}}"
+    },
+    {
+      "name": "Check model",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Outlined model action; disabled while checking or training.",
+      "html": "<button class=\"ds-model\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12a9 9 0 0 1 15-6l3 3M21 3v6h-6M21 12a9 9 0 0 1-15 6l-3-3M3 21v-6h6\"/></svg>Check model</button>",
+      "css": ".ds-model{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:6px;font-family:'IBM Plex Sans Variable',sans-serif;font-weight:500;cursor:pointer;transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease;width:100%;padding:9px 7px;font-size:11px;background:transparent;border-color:#cbd5df;color:var(--blue,#244b68)}.ds-model:hover:not(:disabled){border-color:#a7b9c9;background:#e3eaf0}.ds-model:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-model:active:not(:disabled){transform:translateY(1px)}.ds-model:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-model{transition:none}}"
+    },
+    {
+      "name": "Load sample",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Compact text action in the passage toolbar.",
+      "html": "<button class=\"ds-sample\">Load sample</button>",
+      "css": ".ds-sample{display:inline-flex;align-items:center;gap:5px;background:none;border:0;font-family:'IBM Plex Sans Variable',sans-serif;font-size:10px;color:var(--blue,#244b68);padding:4px 0;cursor:pointer;transition:color 150ms ease}.ds-sample:hover:not(:disabled){color:var(--ink,#233343);text-decoration:underline;text-underline-offset:3px}.ds-sample:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-sample:active:not(:disabled){transform:translateY(1px)}.ds-sample:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-sample{transition:none}}"
+    },
+    {
+      "name": "Clear source text",
+      "kind": "button",
+      "refersTo": "button-clear",
+      "description": "Muted text action with a red hover state.",
+      "html": "<button class=\"ds-clear\" aria-label=\"Clear source text\">Clear</button>",
+      "css": ".ds-clear{display:inline-flex;align-items:center;gap:4px;background:transparent;border:0;font-family:'IBM Plex Sans Variable',sans-serif;font-size:10px;color:var(--muted,#657180);padding:4px 0 4px 8px;cursor:pointer;transition:color 150ms ease}.ds-clear:hover:not(:disabled){color:var(--danger,#a33a34)}.ds-clear:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-clear:active:not(:disabled){transform:translateY(1px)}.ds-clear:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-clear{transition:none}}"
+    },
+    {
+      "name": "Passage field",
+      "kind": "input",
+      "refersTo": "input-passage",
+      "description": "Labeled passage input with hover, invalid, and keyboard focus states.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-passage\">Your passage</label><textarea class=\"ds-passage\" id=\"ds-passage\" placeholder=\"Paste or write your text here…\"></textarea>",
+      "css": ".ds-field-label{display:block;font-family:'IBM Plex Sans Variable',sans-serif;font-size:11px;font-weight:500;color:var(--muted,#657180);margin-bottom:15px}.ds-passage{display:block;width:100%;height:303px;min-height:200px;box-sizing:border-box;background:#fbfcfd;border:1px solid #dce3e9;border-radius:6px;padding:18px;color:var(--ink,#233343);font-family:'IBM Plex Sans Variable',sans-serif;font-size:13px;line-height:1.85;resize:none;caret-color:var(--ochre,#a27624)}.ds-passage::placeholder{color:#748190}.ds-passage:hover:not(:disabled){border-color:#b7c6d3}.ds-passage:focus{border-color:var(--blue,#244b68)}.ds-passage:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-passage[aria-invalid=true]{border-color:var(--danger,#a33a34)}@media(max-width:700px){.ds-passage{height:255px;padding:14px;font-size:16px;line-height:1.7}}"
+    },
+    {
+      "name": "Workbench navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Active and inactive sidebar rows.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Workbench\"><a class=\"ds-nav-link ds-active\" href=\"#workspace\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8h8M7 12h10M7 16h6\"/></svg>Text analysis</a><a class=\"ds-nav-link\" href=\"#pipeline-guide\">Pipeline guide</a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:7px;padding:8px;background:#eff2f5}.ds-nav-link{display:flex;align-items:center;gap:11px;border-radius:6px;padding:11px 12px;font-family:'IBM Plex Sans Variable',sans-serif;font-size:13px;font-weight:500;color:var(--muted,#657180);white-space:nowrap;text-decoration:none}.ds-nav-link:hover{background:#e6ebf0;color:var(--ink,#233343)}.ds-nav-link.ds-active{background:#e0e7ee;color:var(--blue,#244b68);font-weight:600}.ds-nav-link:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}"
+    },
+    {
+      "name": "Report status",
+      "kind": "chip",
+      "refersTo": "report-badge",
+      "description": "Static labels for the current report state.",
+      "html": "<span class=\"ds-report-badge\">Awaiting text</span> <span class=\"ds-report-badge ds-complete\">Complete</span>",
+      "css": ".ds-report-badge{display:inline-block;padding:4px 8px;border-radius:4px;background:#f1f3f6;color:var(--muted,#657180);font-family:'IBM Plex Sans Variable',sans-serif;font-size:9px;white-space:nowrap}.ds-report-badge.ds-complete{color:var(--green,#39725b);background:#eaf3ed}"
+    },
+    {
+      "name": "Report panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "White bordered panel with a compact section heading.",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-panel-heading\"><h2>Analysis report</h2><span>Complete</span></div><div class=\"ds-panel-body\">Model verdict: Human</div></section>",
+      "css": ".ds-panel{background:var(--paper,#fff);border:1px solid var(--line,#e2e6eb);border-radius:10px;min-width:0;overflow:hidden;color:var(--ink,#233343);font-family:'IBM Plex Sans Variable',sans-serif;}.ds-panel-heading{height:61px;padding:0 23px;border-bottom:1px solid var(--line,#e2e6eb);display:flex;align-items:center;justify-content:space-between;gap:12px}.ds-panel-heading h2{margin:0;font-family:var(--font-heading,'Manrope Variable',sans-serif);font-size:13px;font-weight:700;letter-spacing:-.1px}.ds-panel-heading>span{font-size:10px;color:var(--green,#39725b)}.ds-panel-body{padding:24px 23px;font-family:var(--font-heading,'Manrope Variable',sans-serif);font-size:17px;font-weight:650;line-height:1.6;letter-spacing:-.4px}"
+    },
+    {
+      "name": "M1–M5 pipeline rail",
+      "kind": "custom",
+      "refersTo": "pipeline-rail",
+      "description": "Five ordered links to the actual processing stages.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Five-stage analysis pipeline\"><a href=\"#stage-M1\"><span class=\"ds-rail-icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8h8M7 12h10M7 16h6\"/></svg></span><span class=\"ds-rail-text\"><span><small>M1</small>Lexer</span><span>Text → tokens</span></span></a><a href=\"#stage-M2\"><span class=\"ds-rail-icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1\"/></svg></span><span class=\"ds-rail-text\"><span><small>M2</small>Symbol table</span><span>Tokens → vocabulary</span></span></a><a href=\"#stage-M3\"><span class=\"ds-rail-icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 6a9 9 0 0 0-9 9V3\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/></svg></span><span class=\"ds-rail-text\"><span><small>M3</small>Parser</span><span>Words → structure</span></span></a><a href=\"#stage-M4\"><span class=\"ds-rail-icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83zM2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\"/></svg></span><span class=\"ds-rail-text\"><span><small>M4</small>Features</span><span>Structure → signals</span></span></a><a href=\"#stage-M5\"><span class=\"ds-rail-icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 18h8M3 22h18M14 22a7 7 0 1 0 0-14h-1M9 14h2M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2ZM12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3\"/></svg></span><span class=\"ds-rail-text\"><span><small>M5</small>Scoring</span><span>Signals → verdict</span></span></a></nav>",
+      "css": ".ds-rail{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line,#e2e6eb);background:#f0f3f6;border-radius:9px;padding:20px 8px;font-family:'IBM Plex Sans Variable',sans-serif;color:var(--ink,#233343)}.ds-rail>a{display:flex;align-items:center;gap:10px;min-width:0;padding:0 13px;text-decoration:none;color:inherit}.ds-rail>a:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-rail-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid #dce3e9;background:#f9fafb;border-radius:7px;color:#5f7589;flex-shrink:0}.ds-rail>a:hover .ds-rail-icon{color:var(--blue,#244b68);border-color:#b0c0ce;background:var(--paper,#fff)}.ds-rail-text{display:flex;flex-direction:column;gap:5px;min-width:0}.ds-rail-text>span:first-child{display:flex;gap:7px;font-size:11px;font-weight:600;white-space:nowrap}.ds-rail-text small{font-family:var(--font-mono,'IBM Plex Mono',monospace);font-size:9px;color:var(--muted,#657180);font-weight:400;align-self:center}.ds-rail-text>span:last-child{font-size:9px;white-space:nowrap;color:var(--muted,#657180)}@media(max-width:1280px){.ds-rail{padding:16px 3px}.ds-rail>a{padding-inline:10px;gap:8px}.ds-rail-text>span:last-child{display:none}}@media(max-width:700px){.ds-rail{padding:13px 3px}.ds-rail>a{flex-direction:column;gap:7px;padding-inline:1px}.ds-rail-icon{height:28px;width:28px}.ds-rail-text>span:first-child{flex-direction:column;align-items:center;gap:4px;font-size:8px}.ds-rail-text small{font-size:8px}}"
+    },
+    {
+      "name": "Pipeline stage disclosure",
+      "kind": "custom",
+      "refersTo": "stage-disclosure",
+      "description": "Native disclosure for inspectable pipeline output.",
+      "html": "<details class=\"ds-stage\"><summary><span class=\"ds-stage-code\">M1</span><span class=\"ds-stage-title\">Lexer</span><span class=\"ds-stage-summary\">Text → tokens</span><span class=\"ds-chevron\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></span></summary><div class=\"ds-stage-body\">Words, numbers, punctuation, and sentence endings.</div></details>",
+      "css": ".ds-stage{color:var(--ink,#233343);font-family:'IBM Plex Sans Variable',sans-serif;}.ds-stage>summary{display:flex;align-items:center;gap:9px;padding:18px 23px;list-style:none;cursor:pointer}.ds-stage>summary::-webkit-details-marker{display:none}.ds-stage>summary:hover{background:#fafbfd}.ds-stage>summary:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-stage-code{display:inline-flex;align-items:center;justify-content:center;width:27px;height:23px;background:var(--blue-wash,#e9eff4);color:var(--blue,#244b68);border-radius:4px;font-family:var(--font-mono,'IBM Plex Mono',monospace);font-size:9px}.ds-stage-title{font-size:12px;font-weight:600}.ds-stage-summary{font-size:9px;color:var(--muted,#657180);margin-left:auto}.ds-chevron{display:inline-flex;color:#8796a4;transition:transform 150ms ease}.ds-stage:not([open]) .ds-chevron{transform:rotate(-90deg)}.ds-stage-body{padding:0 23px 22px;font-size:10px;line-height:1.8;color:var(--muted,#657180)}@media(prefers-reduced-motion:reduce){.ds-chevron{transition:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Analysis workbench",
+    "overview": "The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The M1–M5 rail identifies the actual processing order and links to each stage.\n\nThis is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “No analysis yet,” and “Model verdict: Human” or “Model verdict: AI.” Avoid promotional or poetic language.",
+    "keyCharacteristics": [
+      "Clear separation between source text, model readiness, and results.",
+      "A visible M1–M5 sequence grounded in the real pipeline.",
+      "Flat surfaces, thin borders, and limited color accents.",
+      "Direct labels, explicit states, and inspectable technical output."
+    ],
+    "rules": [
+      {
+        "name": "The Status Text Rule",
+        "body": "Pair status colors with a label, icon, or explicit value; a score color must never imply proof of authorship.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Surface Rule",
+        "body": "Use the existing surface fills and borders to separate content; retain the implemented shadow-free treatment.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the source, results, and model state visually distinct.",
+      "Do use the actual M1–M5 stages and direct action labels.",
+      "Do keep visible keyboard focus and explicit status text.",
+      "Do keep technical data scrollable within its report region.",
+      "Do update this record with the canonical CSS when shared visual values change."
+    ],
+    "donts": [
+      "Don't add slogans, poetic empty states, or promotional copy.",
+      "Don't describe experimental scores as confidence or proof of authorship.",
+      "Don't add shadows to the current flat panel system.",
+      "Don't use color as the sole explanation of a verdict or state.",
+      "Don't convert component-specific metadata sizes or decorative exceptions into global defaults."
+    ]
+  }
+}
