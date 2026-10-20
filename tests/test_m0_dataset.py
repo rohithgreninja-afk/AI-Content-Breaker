@@ -34,6 +34,29 @@ class MapperTests(unittest.TestCase):
                  "generated_intro": "machine " * 30}]
         self.assertEqual(dataset.collect("wiki", rows), [])
 
+    def test_seeded_selection_does_not_depend_on_cache_order(self):
+        rows = [{"row_idx": i, "id": i,
+                 "wiki_intro": f"human article {i} " + "prose " * 25,
+                 "generated_intro": f"machine article {i} " + "prose " * 30}
+                for i in range(10)]
+        shuffled = list(rows)
+        random.Random(17).shuffle(shuffled)
+        self.assertEqual(dataset.collect("wiki", rows), dataset.collect("wiki", shuffled))
+
+    def test_pool_digest_ignores_row_order_json_spacing_and_line_endings(self):
+        rows = [{"row_idx": 1, "text": "caf\u00e9", "label": "human"},
+                {"row_idx": 2, "text": "other", "label": "ai"}]
+        with tempfile.TemporaryDirectory() as temporary:
+            first = Path(temporary) / "first.jsonl"
+            second = Path(temporary) / "second.jsonl"
+            first.write_bytes("".join(json.dumps(row, ensure_ascii=False) + "\r\n"
+                                      for row in rows).encode("utf-8"))
+            second.write_bytes("".join(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+                                       for row in reversed(rows)).encode("utf-8"))
+            self.assertNotEqual(dataset.file_sha256(str(first)), dataset.file_sha256(str(second)))
+            self.assertEqual(dataset.pool_sha256(str(first)), dataset.pool_sha256(str(second)))
+            self.assertEqual(dataset.pool_sha256(rows), dataset.pool_sha256(str(first)))
+
     def test_natural_source_ids_and_global_prefixes(self):
         self.assertEqual(dataset.natural_group("raid", {"source_id": "original"}, "a"),
                          dataset.natural_group("raid", {"source_id": "original"}, "b"))
@@ -150,7 +173,8 @@ class FetchTests(unittest.TestCase):
             self.assertIn((offset, dataset.BLOCK_LEN, "pinned"), calls)
             metadata = json.loads((Path(temporary) / "mage_pool.meta.json").read_text())
             self.assertEqual(metadata["completed_offsets"], [offset])
-            self.assertEqual(metadata["pool_sha256"], dataset.file_sha256(str(pool)))
+            self.assertEqual(metadata["pool_sha256"], dataset.pool_sha256(str(pool)))
+            self.assertEqual(metadata["pool_digest_format"], dataset.POOL_DIGEST_FORMAT)
 
     def test_legacy_incomplete_pool_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

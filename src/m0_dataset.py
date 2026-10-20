@@ -63,6 +63,7 @@ MIN_WORDS = 20        # drop fragments; MIN_WORDS in pipeline gates at 50
 MAX_WORDS = 300       # longer texts are cut to this many words
 SEED = 42
 LLAMA_SIZES = {"7B", "13B", "30B", "65B"}
+POOL_DIGEST_FORMAT = "sha256-canonical-json-v1"
 
 
 # --------------------------------------------------------------------------
@@ -208,6 +209,19 @@ def file_sha256(path: str) -> str:
     return digest.hexdigest()
 
 
+def pool_sha256(pool: list[dict] | str) -> str:
+    """Hash content independently of fetch order, JSON spacing and line endings."""
+    if isinstance(pool, str):
+        with open(pool, encoding="utf-8") as handle:
+            pool = [json.loads(line) for line in handle]
+    digest = hashlib.sha256()
+    for row in sorted(pool, key=lambda item: item["row_idx"]):
+        encoded = json.dumps(row, ensure_ascii=False, sort_keys=True,
+                             separators=(",", ":"), allow_nan=False).encode("utf-8")
+        digest.update(encoded + b"\n")
+    return digest.hexdigest()
+
+
 def _atomic_json(value: dict, path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
@@ -282,8 +296,15 @@ def fetch_pool(name: str) -> list[dict]:
             raise RuntimeError(f"{name}: cache identity differs from pinned source")
         if metadata.get("sample_offsets", offsets) != offsets:
             raise RuntimeError(f"{name}: requested sample differs from cached sample")
-        if metadata.get("pool_sha256") and metadata["pool_sha256"] != file_sha256(path):
-            raise RuntimeError(f"{name}: cached pool digest does not match metadata")
+        if metadata.get("pool_sha256"):
+            # Migrate already verified legacy byte digests on the next completed
+            # fetch; future checkpoints use the portable content digest.
+            digest_format = metadata.get("pool_digest_format")
+            if digest_format not in (None, POOL_DIGEST_FORMAT):
+                raise RuntimeError(f"{name}: unknown cache digest format")
+            actual = pool_sha256(rows) if digest_format else file_sha256(path)
+            if metadata["pool_sha256"] != actual:
+                raise RuntimeError(f"{name}: cached pool digest does not match metadata")
         completed = set(metadata.get("completed_offsets", []))
         for offset in completed:
             if not all(i in have for i in range(offset, offset + BLOCK_LEN)):
@@ -341,7 +362,8 @@ def fetch_pool(name: str) -> list[dict]:
                 print(f"  {name}: {i}/{len(todo)} blocks, {len(rows)} rows",
                       flush=True)
             time.sleep(REQUEST_GAP)
-    metadata["pool_sha256"] = file_sha256(path)
+    metadata["pool_sha256"] = pool_sha256(rows)
+    metadata["pool_digest_format"] = POOL_DIGEST_FORMAT
     metadata["pool_rows"] = len(rows)
     _atomic_json(metadata, metadata_path)
     return rows
@@ -395,7 +417,7 @@ def collect(name: str, pool: list[dict],
     """
     mapper = SOURCES[name][5]
     cells: dict[tuple[str, str], list[list]] = {}
-    for row in pool:
+    for row in sorted(pool, key=lambda item: item["row_idx"]):
         for index, (label, model, domain, text) in enumerate(mapper(row)):
             if label not in ("human", "ai"):
                 raise ValueError(f"invalid {name} label: {label!r}")
@@ -514,7 +536,8 @@ def write_manifest(rows: list[list], row_groups: dict[str, str],
             "dataset": dataset, "url": f"https://huggingface.co/datasets/{dataset}",
             "config": config, "split": split, "revision": revision,
             "blocks": n_blocks, "pool_rows": metadata["pool_rows"],
-            "pool_sha256": file_sha256(pool_path),
+            "pool_sha256": pool_sha256(pool_path),
+            "pool_digest_format": POOL_DIGEST_FORMAT,
             "api_num_rows_total": metadata["num_rows_total"],
             "api_partial": metadata["partial"], "rows": len(selected),
             "labels": dict(Counter(row[2] for row in selected)),
