@@ -319,11 +319,13 @@ class ModelScorer:
     def score_features(self, features: dict[str, float]) -> float:
         """Probability in 0.0-1.0 that the text behind these features is AI."""
         import numpy as np
+        from threadpoolctl import threadpool_limits
 
         pipeline = self._require_fitted()
         vector = np.asarray([[features[n] for n in self.feature_names]],
                             dtype=float)
-        return float(pipeline.predict_proba(vector)[0, 1])
+        with threadpool_limits(limits=2):
+            return float(pipeline.predict_proba(vector)[0, 1])
 
     def score(self, text: str) -> float:
         """Extract features from text and score it."""
@@ -762,8 +764,18 @@ def _classification_metrics(labels, probabilities) -> dict:
 def _heldout_metrics(model: ModelScorer, features: list[dict],
                      rows: list[dict], test_idx: list[int]) -> dict:
     """Metrics for every source and for the pipeline's 50-word abstention gate."""
+    import numpy as np
+    from threadpoolctl import threadpool_limits
+
     rule_scorer = RuleScorer()
-    predictions = {i: model.score_features(features[i]) for i in test_idx}
+    if test_idx:
+        vectors = np.asarray([[features[i][name] for name in model.feature_names]
+                              for i in test_idx], dtype=float)
+        with threadpool_limits(limits=2):
+            probabilities = model.pipeline.predict_proba(vectors)[:, 1]
+    else:
+        probabilities = np.empty(0, dtype=float)
+    predictions = dict(zip(test_idx, probabilities))
     rule_predictions = {i: rule_scorer.score_features(features[i]) for i in test_idx}
 
     def summarize(indices):
@@ -810,9 +822,14 @@ def _print_model_report(features: list[dict], labels: list[str],
         print(f"C selected using training groups only: {selection['best_C']:g}")
     print(f"confusion matrix [[hh, ha], [ah, aa]] = {report['confusion_matrix']}")
     print(report["report"])
-    print("top coefficients (standardised; + pushes toward AI):")
-    for name, weight in model.top_coefficients(15):
-        print(f"  {name:32} {weight:+8.4f}")
+    try:
+        coefficients = model.top_coefficients(15)
+    except ValueError as error:
+        print(str(error))
+    else:
+        print("top coefficients (standardised; + pushes toward AI):")
+        for name, weight in coefficients:
+            print(f"  {name:32} {weight:+8.4f}")
     if save:
         from datetime import datetime, timezone
         from collections import Counter
