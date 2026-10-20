@@ -129,7 +129,7 @@ class TestTrainingOnlyCrossValidation(unittest.TestCase):
             "y": indices % 2,
             "groups": groups,
             "ids": np.asarray([f"training-{index}" for index in indices]),
-            "words": np.where(indices % 4 < 2, 30, 60),
+            "words": np.where(indices % 2 == 0, 30, 60),
             "sources": np.where(indices % 4 < 2, "mage", "hc3"),
         }
         fit_events, validation_events = [], []
