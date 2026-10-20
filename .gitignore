@@ -9,6 +9,7 @@ __pycache__/
 data/*.csv
 data/*.jsonl
 data/*.json
+data/*.npz
 models/*
 # Ship the small trained classifier and its provenance, not the source corpora.
 !models/m5_logreg.joblib
