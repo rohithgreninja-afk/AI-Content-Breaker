@@ -9,8 +9,11 @@ from __future__ import annotations
 from contextlib import redirect_stdout
 from copy import deepcopy
 import io
+import json
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -214,6 +217,147 @@ class TestPredeclaredSelectionPolicy(unittest.TestCase):
                 changed[key] = value
                 with self.assertRaisesRegex(ValueError, "unsupported selection protocol"):
                     training.validate_protocol(changed)
+
+
+class TestFinalizeSelectionBoundary(unittest.TestCase):
+    """Reject changed experiment records before training or touching test text."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.protocol_path = Path(temporary.name) / "protocol.json"
+        self.selection_path = Path(temporary.name) / "selection.json"
+        self.policy = protocol()
+        ids = [f"train-{index}" for index in range(10)]
+        self.identity = {"training_ids": ids, "dataset_sha256": "fixed-corpus"}
+        self.data = {"ids": np.asarray(ids),
+                     "groups": np.asarray([f"group-{index // 2}" for index in range(10)])}
+        candidates = [
+            {**self.policy["candidates"][0], **result("baseline", 0.70, 0.65)},
+            {**self.policy["candidates"][1], **result("candidate", 0.74, 0.67)},
+        ]
+        self.selection = {
+            "protocol_sha256": training.json_digest(self.policy),
+            "candidates": candidates, "winner": "candidate",
+            "estimator_config": self.policy["candidates"][1]["config"],
+            "test_evaluated_during_selection": False,
+            "training_identity": deepcopy(self.identity),
+            "training_feature_cache_sha256": "fixed-features",
+            "fold_assignment": {row_id: index // 2 for index, row_id in enumerate(ids)},
+        }
+        self.protocol_path.write_text(json.dumps(self.policy), encoding="utf-8")
+        self.write_selection()
+        mocks = {
+            "PROTOCOL_PATH": patch.object(training, "PROTOCOL_PATH", self.protocol_path),
+            "SELECTION_PATH": patch.object(training, "SELECTION_PATH", self.selection_path),
+            "committed": patch.object(training, "committed_json", return_value="recorded-commit"),
+            "prepare": patch.object(training, "prepare_training", return_value=(
+                self.data, {"identity": self.identity, "cache_sha256": "fixed-features"})),
+            "extract": patch.object(training, "extract_features",
+                                    side_effect=AssertionError("heldout text was transformed")),
+            "read_rows": patch.object(training, "load_dataset_rows",
+                                      side_effect=AssertionError("heldout data stage was reached")),
+        }
+        for name, mock in mocks.items():
+            setattr(self, name, mock.start())
+            self.addCleanup(mock.stop)
+
+    def write_selection(self):
+        self.selection_path.write_text(json.dumps(self.selection), encoding="utf-8")
+
+    def assert_no_test_stage(self):
+        self.extract.assert_not_called()
+        self.read_rows.assert_not_called()
+
+    def test_uncommitted_protocol_or_selection_fails_before_preparing_features(self):
+        for committed_replies in ([ValueError("commit protocol before final test evaluation")],
+                                  ["protocol-commit", ValueError("commit selection before final test evaluation")]):
+            with self.subTest(replies=committed_replies):
+                self.committed.side_effect = committed_replies
+                with self.assertRaisesRegex(ValueError, "commit .* before final test evaluation"):
+                    training.finalize()
+                self.prepare.assert_not_called()
+                self.assert_no_test_stage()
+
+    def test_changed_protocol_hash_fails_before_preparing_features(self):
+        self.selection["protocol_sha256"] = "changed-protocol"
+        self.write_selection()
+        with self.assertRaisesRegex(ValueError, "does not match the committed protocol"):
+            training.finalize()
+        self.prepare.assert_not_called()
+        self.assert_no_test_stage()
+
+    def test_changed_training_identity_or_feature_cache_fails_before_test_stage(self):
+        for change in ({"training_identity": {"dataset_sha256": "other-corpus"}},
+                       {"training_feature_cache_sha256": "other-features"}):
+            with self.subTest(change=change):
+                original = deepcopy(self.selection)
+                self.selection.update(change)
+                self.write_selection()
+                with self.assertRaisesRegex(ValueError, "changed after selection"):
+                    training.finalize()
+                self.assert_no_test_stage()
+                self.selection = original
+
+    def test_invalid_fold_numbers_fail_before_test_stage(self):
+        for fold in (-1, 5, "0", True):
+            with self.subTest(fold=fold):
+                self.selection["fold_assignment"]["train-0"] = fold
+                self.write_selection()
+                with self.assertRaisesRegex(ValueError, "invalid saved validation fold number"):
+                    training.finalize()
+                self.assert_no_test_stage()
+
+    def test_related_group_in_multiple_folds_fails_before_test_stage(self):
+        self.selection["fold_assignment"]["train-1"] = 1
+        self.write_selection()
+        with self.assertRaisesRegex(ValueError, "split a related group"):
+            training.finalize()
+        self.assert_no_test_stage()
+
+    def test_missing_fold_or_training_id_fails_before_test_stage(self):
+        original = deepcopy(self.selection["fold_assignment"])
+        self.selection["fold_assignment"] = dict.fromkeys(original, 0)
+        self.write_selection()
+        with self.assertRaisesRegex(ValueError, "do not cover all five folds"):
+            training.finalize()
+        self.assert_no_test_stage()
+        self.selection["fold_assignment"] = original
+        self.selection["fold_assignment"].pop("train-9")
+        self.write_selection()
+        with self.assertRaisesRegex(ValueError, "cover exactly the training IDs"):
+            training.finalize()
+        self.assert_no_test_stage()
+
+
+class TestCommittedJsonGuard(unittest.TestCase):
+    """Exercise the actual Git-content check using synthetic command responses."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.path = self.root / "record.json"
+        self.path.write_text('{"name": "frozen", "revision": 1}', encoding="utf-8")
+        mock = patch.object(training, "ROOT", self.root)
+        mock.start()
+        self.addCleanup(mock.stop)
+
+    def test_untracked_record_is_rejected(self):
+        with patch.object(subprocess, "check_output", side_effect=subprocess.CalledProcessError(128, "git")):
+            with self.assertRaisesRegex(ValueError, "commit record.json before final test evaluation"):
+                training.committed_json(self.path)
+
+    def test_edited_record_is_rejected(self):
+        committed = b'{"name": "different", "revision": 1}'
+        with patch.object(subprocess, "check_output", side_effect=[committed, "commit-sha\n"]):
+            with self.assertRaisesRegex(ValueError, "commit changes to record.json"):
+                training.committed_json(self.path)
+
+    def test_formatting_only_changes_preserve_committed_identity(self):
+        committed = b'{\n  "revision": 1,\n  "name": "frozen"\n}'
+        with patch.object(subprocess, "check_output", side_effect=[committed, "commit-sha\n"]):
+            self.assertEqual(training.committed_json(self.path), "commit-sha")
 
 
 if __name__ == "__main__":
