@@ -25,7 +25,7 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function Score({ label, value, verdict, abstain }: { label: string; value: number | null; verdict: string | null; abstain: boolean }) {
-  const readable = abstain ? 'Not enough text' : verdict === 'ai' ? 'AI-like patterns' : verdict === 'human' ? 'Human-like patterns' : 'Model unavailable'
+  const readable = abstain ? 'Insufficient text' : verdict === 'ai' ? 'Verdict: AI' : verdict === 'human' ? 'Verdict: Human' : 'Model unavailable'
   return <div className="score">
     <div className="score-heading"><span>{label}</span><span className="score-value">{abstain || value === null ? '—' : percent(value)}</span></div>
     <div className="score-track" aria-hidden="true"><span style={{ width: `${!abstain && value !== null ? value * 100 : 0}%` }} /></div>
@@ -71,6 +71,7 @@ export default function App() {
   const mounted = useRef(true)
   const modelBusy = useRef(false)
   const copyTimer = useRef<number | undefined>(undefined)
+  const guide = useRef<HTMLDetailsElement>(null)
   const wordCount = text.split(/\s+/u).filter(piece => /\p{L}/u.test(piece)).length
   const minWords = model?.min_words || 50
   const maxCharacters = model?.max_characters || 50000
@@ -156,7 +157,7 @@ export default function App() {
     <aside className="sidebar">
       <Brand />
       <div className="sidebar-caption">AI text detection</div>
-      <nav aria-label="Workbench"><a className="nav-link nav-active" href="#workspace"><ScanText size={18} />Text analysis<ArrowUpRight size={14} /></a><a className="nav-link" href="#pipeline-guide"><BookOpen size={18} />Pipeline guide</a></nav>
+      <nav aria-label="Workbench"><a className="nav-link nav-active" href="#workspace"><ScanText size={18} />Text analysis<ArrowUpRight size={14} /></a><a className="nav-link" href="#pipeline-guide" onClick={() => { if (guide.current) guide.current.open = true }}><BookOpen size={18} />Pipeline guide</a></nav>
       <div className="sidebar-bottom">
         <div className="model-panel">
           <div className="model-label"><Cpu size={17} /><span>Local model</span><span className={`status-dot ${model?.ready ? 'ready' : training ? 'working' : ''}`} /></div>
@@ -178,7 +179,7 @@ export default function App() {
       <main id="workspace">
         <div className="page-heading"><div><h1>Text analysis</h1><p>Analyze text and inspect the output of each pipeline stage.</p></div><span className="project-label">Compiler design<br /><strong>M1–M5 pipeline</strong></span></div>
         <div className={`pipeline-rail ${analyzing ? 'pipeline-running' : ''}`} aria-label="Five-stage analysis pipeline">
-          {stages.map(({ id, name, description, icon: Icon }) => <a key={id} href={result ? `#stage-${id}` : '#pipeline-guide'} onClick={() => { if (result) setView('pipeline') }}><span className="rail-icon"><Icon size={18} strokeWidth={1.7} /></span><span className="rail-text"><span><small>{id}</small>{name}</span><span>{description}</span></span><ArrowRight size={13} className="rail-arrow" /></a>)}
+          {stages.map(({ id, name, description, icon: Icon }) => <a key={id} href={result ? `#stage-${id}` : '#pipeline-guide'} onClick={() => { if (result) setView('pipeline'); else if (guide.current) guide.current.open = true }}><span className="rail-icon"><Icon size={18} strokeWidth={1.7} /></span><span className="rail-text"><span><small>{id}</small>{name}</span><span>{description}</span></span><ArrowRight size={13} className="rail-arrow" /></a>)}
         </div>
 
         <div className="workspace-grid">
@@ -186,11 +187,11 @@ export default function App() {
             <div className="panel-heading"><div><FileText size={18} /><h2 id="source-heading">Source text</h2></div><span className="small-label">English</span></div>
             <form onSubmit={analyze} noValidate>
               <div className="editor-toolbar"><label htmlFor="source-text">Your passage</label><button type="button" className="text-button" onClick={loadSample} disabled={sampleLoading || analyzing}>{sampleLoading ? <LoaderCircle size={13} className="spin" /> : <Clipboard size={13} />}Load sample</button></div>
-              <div className="textarea-wrap"><textarea ref={input} id="source-text" placeholder="Paste or write your text here…" value={text} onChange={event => { setText(event.target.value); if (error) setError('') }} spellCheck={false} aria-describedby={`input-help${error ? ' input-error' : ''}`} aria-invalid={!!error} disabled={analyzing} maxLength={maxCharacters} /><span className="editor-corner" aria-hidden="true"><Braces size={24} strokeWidth={1} /></span></div>
-              <div className="editor-meta"><span><strong>{wordCount.toLocaleString('en-IN')}</strong> words<span className="meta-divider">/</span>{text.length.toLocaleString('en-IN')} characters</span><button type="button" className="clear-button" disabled={!text || analyzing} onClick={() => { setText(''); setError(''); input.current?.focus() }} aria-label="Clear source text"><Trash2 size={14} />Clear</button></div>
+              <div className="textarea-wrap"><textarea ref={input} id="source-text" placeholder="Paste or write your text here…" value={text} onChange={event => { setText(event.target.value); if (error) setError('') }} spellCheck={false} aria-describedby={`input-help${error ? ' input-error' : ''}`} aria-invalid={!!error} disabled={analyzing || sampleLoading} maxLength={maxCharacters} /><span className="editor-corner" aria-hidden="true"><Braces size={24} strokeWidth={1} /></span></div>
+              <div className="editor-meta"><span><strong>{wordCount.toLocaleString('en-IN')}</strong> words<span className="meta-divider">/</span>{text.length.toLocaleString('en-IN')} characters</span><button type="button" className="clear-button" disabled={!text || analyzing || sampleLoading} onClick={() => { setText(''); setError(''); input.current?.focus() }} aria-label="Clear source text"><Trash2 size={14} />Clear</button></div>
               <div className={`input-help ${wordCount >= minWords ? 'input-ready' : ''}`} id="input-help">{wordCount >= minWords ? <CheckCheck size={15} /> : <CircleHelp size={15} />}<span>{wordCount >= minWords ? 'Enough text for a verdict.' : `At least ${minWords} words are needed for a verdict.`}</span></div>
               <div className="form-feedback">{error && <p id="input-error" className="inline-error" role="alert"><TriangleAlert size={16} />{error}</p>}</div>
-              <button type="submit" className="button button-primary analyze-button" disabled={analyzing}><span>{analyzing ? <LoaderCircle size={17} className="spin" /> : <Play size={16} fill="currentColor" />}{analyzing ? 'Analyzing text…' : 'Analyze text'}</span><ArrowRight size={17} /></button>
+              <button type="submit" className="button button-primary analyze-button" disabled={analyzing || sampleLoading}><span>{analyzing ? <LoaderCircle size={17} className="spin" /> : <Play size={16} fill="currentColor" />}{analyzing ? 'Analyzing text…' : 'Analyze text'}</span><ArrowRight size={17} /></button>
             </form>
             <div className="source-footnote"><ShieldCheck size={14} /><p>Analysis runs locally. Your passage isn’t saved.</p></div>
           </section>
@@ -206,7 +207,7 @@ export default function App() {
           </section>
         </div>
 
-        <details className="pipeline-guide" id="pipeline-guide"><summary><span><BookOpen size={17} /><strong>Pipeline guide</strong><span>M1–M5 stages</span></span><span className="guide-toggle">View stages<ArrowDown size={15} /></span></summary><div className="guide-content">{stages.map(({ id, name, icon: Icon }, i) => <div key={id}><span><Icon size={19} /><small>{id}</small></span><h3>{name}</h3><p>{['A maximal-munch lexer identifies words, numbers, punctuation, and sentence endings.', 'A symbol table tracks each word’s frequency and position in the token stream.', 'A recursive-descent grammar builds sentence trees. POS automata detect structural templates.', 'The feature extractor turns lexical and syntactic attributes into 89 measurable signals.', 'Nine inspectable rules and a trained classifier independently score the same passage.'][i]}</p></div>)}</div></details>
+        <details className="pipeline-guide" ref={guide} id="pipeline-guide"><summary><span><BookOpen size={17} /><strong>Pipeline guide</strong><span>M1–M5 stages</span></span><span className="guide-toggle">View stages<ArrowDown size={15} /></span></summary><div className="guide-content">{stages.map(({ id, name, icon: Icon }, i) => <div key={id}><span><Icon size={19} /><small>{id}</small></span><h3>{name}</h3><p>{['A maximal-munch lexer identifies words, numbers, punctuation, and sentence endings.', 'A symbol table tracks each word’s frequency and position in the token stream.', 'A recursive-descent grammar builds sentence trees. POS automata detect structural templates.', 'The feature extractor turns lexical and syntactic attributes into 89 measurable signals.', 'Nine inspectable rules and a trained classifier independently score the same passage.'][i]}</p></div>)}</div></details>
         <footer className="page-footer"><span>AI Content Breaker</span><span>Experimental stylometric analysis</span></footer>
       </main>
     </div>
