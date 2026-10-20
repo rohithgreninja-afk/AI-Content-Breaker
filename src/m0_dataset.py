@@ -21,8 +21,10 @@ and the scorers learned "short or not an abstract = AI".
 
 Full downloads are hundreds of MB and the HF CDN is slow from some networks,
 so every source is sampled through the HF datasets-server rows API: blocks of
-rows at seeded random offsets across the whole split, cached and resumable in
-data/<source>_pool.jsonl. Revisions are pinned below and checked at start.
+rows at seeded random offsets across the available API split, cached and
+resumable in data/<source>_pool.jsonl. The API can expose a partial split
+(currently RAID); the manifest records this and the observed domains.
+Revisions are checked on the hub and on every rows-API response.
 
 Balancing, per (source, domain): equal human and AI counts (at most PER_CELL
 pairs), and each human text is paired with an AI text and both are cut to the
@@ -229,6 +231,8 @@ def fetch_pool(name: str) -> list[dict]:
         with open(path, encoding="utf-8") as handle:
             rows = [json.loads(line) for line in handle]
     have = {row["row_idx"] for row in rows}
+    if len(have) != len(rows):
+        raise RuntimeError(f"{name}: duplicate row indices in cached pool")
 
     info = _get_rows(dataset, config, split, 0, 1, revision)
     total = int(info["num_rows_total"])
@@ -414,7 +418,7 @@ def write_csv(rows_out: list, path: str) -> None:
 
 
 def deduplicate_pairs(rows: list[list], natural_groups: dict[str, str],
-                      group_links: list[tuple[str, str]] = ()
+                      group_links: list[tuple[str, str]] | None = None
                       ) -> tuple[list[list], dict[str, str], int]:
     """Deduplicate after truncation, dropping complete matched pairs.
 
@@ -435,7 +439,7 @@ def deduplicate_pairs(rows: list[list], natural_groups: dict[str, str],
         if left != right:
             parents[max(left, right)] = min(left, right)
 
-    for left, right in group_links:
+    for left, right in group_links or []:
         union(left, right)
     seen: dict[str, str] = {}
     retained: list[list] = []
