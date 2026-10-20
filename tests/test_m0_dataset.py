@@ -144,6 +144,22 @@ class FetchTests(unittest.TestCase):
                 dataset._get_rows("repo", "default", "train", 0, 1)
         sleep.assert_not_called()
 
+    def test_truncated_api_cells_are_never_cached_as_complete(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = ("repo", "default", "train", "pinned", 1, dataset.map_mage)
+            def get_rows(_dataset, _config, _split, start, length, _revision):
+                return {"num_rows_total": 500, "rows": [
+                    {"row_idx": i, "row": {"text": "truncated"},
+                     "truncated_cells": ["text"]} for i in range(start, start + length)]}
+            with patch.object(dataset, "DATA_DIR", temporary), \
+                    patch.dict(dataset.SOURCES, {"mage": source}), \
+                    patch.object(dataset, "_get_rows", side_effect=get_rows):
+                with self.assertRaisesRegex(RuntimeError, "truncated source cells"):
+                    dataset.fetch_pool("mage")
+            metadata = json.loads((Path(temporary) / "mage_pool.meta.json").read_text())
+            self.assertEqual(metadata["completed_offsets"], [])
+            self.assertEqual((Path(temporary) / "mage_pool.jsonl").read_text(), "")
+
     def test_resume_requires_complete_block_not_just_first_row(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = ("repo", "default", "train", "pinned", 1, dataset.map_mage)
