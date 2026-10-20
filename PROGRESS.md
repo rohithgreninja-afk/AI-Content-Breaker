@@ -1,5 +1,39 @@
 # PROGRESS
 
+## 2026-10-20: React analysis workbench
+
+- Added a React/TypeScript frontend in `frontend/` with a focused source editor,
+  model-readiness controls, live word count, sample text, and separate structured
+  pipeline and original-console reports. M1-M5 remain inspectable, including
+  token types, vocabulary frequencies, sentence tags/trees, 89 features, and
+  fired rules. Copying a report preserves the CLI transcript.
+- `npm run dev` starts Vite on `127.0.0.1:5173` and the standard-library Python
+  API on `127.0.0.1:8000`. The runner selects the local `.venv` first, checks
+  Python dependencies, forwards `/api`, and stops both process trees on Ctrl+C.
+  React dependencies and local fonts are locked in `package-lock.json`.
+- Added `src/web_api.py` with model status, asynchronous train/check, sample,
+  and analysis endpoints. Requests validate local hosts/origins, JSON type,
+  payload size, and the 50,000-character limit. Analysis does not save input
+  text and retains the existing 50-word abstention gate.
+- Training checks whether the model actually loads, retains a ready model,
+  prevents duplicate jobs, and reports activity/failures while the interface
+  stays usable. `src/web_training.py` can recreate an unavailable artifact from
+  committed protocol/selection/report records and the original training IDs.
+  It validates runtime, dataset, manifest, feature and cache identities, fits
+  the frozen winner, and does not perform candidate search or holdout tuning.
+  Missing tagger/data downloads use the existing project tools; initial corpus
+  acquisition needs internet and can take tens of minutes.
+- Documented Python/Node setup, `npm install`, `npm run dev`, production build,
+  API contracts, and recovery constraints in README. Existing CLI entry points,
+  trained-model provenance, and model-selection workflow remain available.
+- Verification: `npm run build` passes TypeScript and Vite production bundling.
+  A real `npm run dev` boot returned HTTP 200 from the frontend and proxied
+  model status (`ready: true`, ExtraTrees); Ctrl+C released both listening ports.
+  `.venv\Scripts\python.exe -m unittest discover -s tests` passes all **195
+  tests** in 134.3 seconds, including CLI/API output parity, malformed requests,
+  local-origin protection, duplicate-job prevention, training failure recovery,
+  and a real temporary-artifact refit reproducing the shipped model's scores.
+
 ## 2026-10-20: Improve accuracy using training-only model selection (complete)
 
 This section supersedes the classifier choice and metrics in the previous

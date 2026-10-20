@@ -6,6 +6,71 @@ M0–M5 are implemented. M5b is a 300-tree ExtraTrees classifier over 89 lexical
 and syntactic features, selected using training-only grouped validation.
 Logistic regression remains available as the reference model.
 
+## Run the React workbench
+
+Use Node.js 22.12 or newer and Python 3.14. From the repository root, install
+the Python dependencies and English POS tagger once:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m nltk.downloader averaged_perceptron_tagger_eng
+npm install
+npm run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). `npm run dev` starts both
+the React/Vite frontend and the Python API at `127.0.0.1:8000`; Ctrl+C stops
+both, including a running training subprocess. The launcher prefers the
+repository's `.venv` interpreter, then `PYTHON`, then `python`. On macOS/Linux,
+use `.venv/bin/python` in the setup commands. No API keys are needed. Fonts
+are bundled locally.
+
+The workbench checks whether the saved model can actually load. **Check model**
+verifies an available classifier; **Check & train model** starts background
+training when one is unavailable. Training activity and failures stay visible
+in the sidebar, and refreshing the page reconnects to the active job.
+
+For analysis, paste English text or load the sample, then select **Analyze
+text**. The report organizes the lexer, symbol table, parser, all 89 features,
+and rule breakdown into expandable stages. **Console** contains the same
+stage output as the command-line pipeline, and **Copy report** copies it.
+Inputs are limited to 50,000 characters. Below 50 words both scorers abstain;
+the pipeline details remain available. Submitted passages are not saved.
+
+The included model analyzes new text without downloading the training corpus.
+If the model needs training, the backend installs a missing NLTK tagger and
+fetches missing pinned datasets through M0's `--parquet` path before fitting.
+This first download
+can take tens of minutes and needs internet access. Completed dataset blocks
+are cached. Training restores the committed winning recipe and its original
+training split using `src/web_training.py`; it does not run a new candidate
+search or tune on the holdout. Changed datasets, runtime versions, feature
+code, or uncommitted training records cause an actionable failure. Use the
+explicit CLI workflow below for deliberate new model selection.
+
+Useful frontend commands:
+
+- `npm run dev`: start frontend and backend together.
+- `npm run check`: check the React TypeScript code.
+- `npm run build`: type-check and produce the frontend in `dist/`.
+- `npm run preview`: preview the compiled frontend; start the Python API
+  separately with `.venv\Scripts\python.exe src\web_api.py` for live analysis.
+
+The single frontend route is `/`, with workspace and pipeline-guide anchors.
+Vite forwards `/api` to the loopback-only Python server:
+
+- `GET /api/model`: model readiness, metadata, and training activity.
+- `POST /api/model/train` with `{}`: check or start one background training
+  job; an already usable model is retained.
+- `POST /api/analyze` with `{"text":"..."}`: structured stages, scores,
+  and the original console transcript.
+- `GET /api/sample`: the built-in demonstration passage.
+
+POST requests use `Content-Type: application/json`. The backend validates
+request size and accepts only local application hosts and origins. The React
+source is in `frontend/`; the original Python CLI continues to work.
+
 ## How to train the model
 
 Use Python 3.14. The commands below use PowerShell from the repository root:
