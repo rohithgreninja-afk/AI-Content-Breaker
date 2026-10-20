@@ -63,6 +63,7 @@ MIN_WORDS = 20        # drop fragments; MIN_WORDS in pipeline gates at 50
 MAX_WORDS = 300       # longer texts are cut to this many words
 SEED = 42
 LLAMA_SIZES = {"7B", "13B", "30B", "65B"}
+USE_PARQUET = False
 POOL_DIGEST_FORMAT = "sha256-canonical-json-v1"
 
 
@@ -161,6 +162,10 @@ SOURCES = {
 def _get_rows(dataset: str, config: str, split: str, offset: int,
               length: int, revision: str | None = None) -> dict:
     """One rows-API call, with backoff on rate limits and server errors."""
+    if USE_PARQUET and dataset != "yaful/MAGE":
+        from m0_parquet import parquet_page
+
+        return parquet_page(dataset, config, split, revision, offset, length)
     params = {"dataset": dataset, "config": config, "split": split,
               "offset": offset, "length": length}
     for attempt in range(8):
@@ -355,6 +360,9 @@ def fetch_pool(name: str) -> list[dict]:
         for i, offset in enumerate(todo, 1):
             page = _get_rows(dataset, config, split, offset, BLOCK_LEN, revision)
             page_rows = page.get("rows", [])
+            if any(item.get("truncated_cells") for item in page_rows):
+                raise RuntimeError(f"{name}: API truncated source cells; "
+                                   "resume with --parquet to retrieve full rows")
             if {item["row_idx"] for item in page_rows} != set(range(offset, offset + BLOCK_LEN)):
                 raise RuntimeError(f"{name}: incomplete API block at {offset}")
             for item in page_rows:
@@ -371,7 +379,8 @@ def fetch_pool(name: str) -> list[dict]:
             if i % 10 == 0 or i == len(todo):
                 print(f"  {name}: {i}/{len(todo)} blocks, {len(rows)} rows",
                       flush=True)
-            time.sleep(REQUEST_GAP)
+            if not USE_PARQUET:
+                time.sleep(REQUEST_GAP)
     metadata["pool_sha256"] = pool_sha256(rows)
     metadata["pool_digest_format"] = POOL_DIGEST_FORMAT
     metadata["pool_rows"] = len(rows)
@@ -535,6 +544,8 @@ def write_manifest(rows: list[list], row_groups: dict[str, str],
                    names: list[str], dropped_pairs: int) -> dict:
     """Record source provenance and the exact CSV-to-evaluation-group map."""
     sources = {}
+    from m0_parquet import PINNED_CONVERSIONS
+
     for name in names:
         dataset, config, split, revision, n_blocks, _ = SOURCES[name]
         pool_path = os.path.join(DATA_DIR, f"{name}_pool.jsonl")
@@ -545,6 +556,7 @@ def write_manifest(rows: list[list], row_groups: dict[str, str],
         sources[name] = {
             "dataset": dataset, "url": f"https://huggingface.co/datasets/{dataset}",
             "config": config, "split": split, "revision": revision,
+            "parquet_revision": PINNED_CONVERSIONS.get(dataset),
             "blocks": n_blocks, "pool_rows": metadata["pool_rows"],
             "pool_sha256": pool_sha256(pool_path),
             "pool_digest_format": POOL_DIGEST_FORMAT,
@@ -577,8 +589,10 @@ def label_counts(path: str) -> dict:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Build the combined set. `--only mage,hc3` limits the sources."""
+    """Build the combined set; --parquet recovers from rows-server outages."""
+    global USE_PARQUET
     argv = list(sys.argv[1:] if argv is None else argv)
+    USE_PARQUET = "--parquet" in argv
     names = list(SOURCES)
     if "--only" in argv:
         names = argv[argv.index("--only") + 1].split(",")
