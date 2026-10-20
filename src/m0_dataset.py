@@ -43,10 +43,11 @@ INFO_API = f"https://huggingface.co/api/datasets/{DATASET}"
 N_BLOCKS = 200        # random offsets to read
 BLOCK_LEN = 100       # rows per offset (the API maximum)
 REQUEST_GAP = 1.0     # seconds between requests; the API rate-limits (429)
-PER_CELL = 300        # rows kept per (domain, label)
+PER_CELL = 300        # rows kept per (domain, label), at most
 MIN_WORDS = 20        # drop fragments; MIN_WORDS in pipeline gates at 50
-MAX_WORDS = 400
+MAX_WORDS = 300       # longer texts are cut to this many words
 SEED = 42
+LLAMA_SIZES = {"7B", "13B", "30B", "65B"}
 
 
 def _fetch_block(offset: int) -> list[dict]:
@@ -126,20 +127,34 @@ def parse_src(src: str) -> tuple[str, str]:
     domain, _, rest = src.partition("_machine_")
     # rest is "<method>_<model>", method being continuation/topical/specified.
     method, _, model = rest.partition("_")
-    return domain, model or method
+    model = model or method
+    # MAGE tags LLaMA by size alone ("..._continuation_30B").
+    if model in LLAMA_SIZES:
+        model = f"llama_{model}"
+    return domain, model
 
 
 def is_clean(text: str) -> bool:
-    """Keep real prose: inside the word window, mostly letters."""
-    words = text.split()
-    if not MIN_WORDS <= len(words) <= MAX_WORDS:
+    """Keep real prose: at least MIN_WORDS words, mostly letters."""
+    if len(text.split()) < MIN_WORDS:
         return False
     letters = sum(c.isalpha() for c in text)
     return letters / max(len(text), 1) >= 0.6
 
 
+def _cut(row: list, n_words: int) -> list:
+    """Copy of a CSV row with its text cut to the first n_words words."""
+    return row[:4] + [" ".join(row[4].split()[:n_words])]
+
+
 def collect(pool: list[dict]) -> list[list]:
-    """Balance the pool to PER_CELL rows per (domain, label)."""
+    """Balance and length-match the pool, domain by domain.
+
+    Within each domain the classes get equal counts (so the domain says
+    nothing about the label), and each human row is paired with an AI row
+    and both are cut to the shorter of the two (so length says nothing about
+    the label either). That was the RAID failure: every short text was AI.
+    """
     cells: dict[tuple[str, str], list[list]] = {}
     for row in pool:
         text = " ".join(str(row["text"]).split())
@@ -152,12 +167,19 @@ def collect(pool: list[dict]) -> list[list]:
 
     rng = random.Random(SEED)
     rows_out: list[list] = []
-    for key in sorted(cells):
-        cell = cells[key]
-        rng.shuffle(cell)
-        rows_out.extend(cell[:PER_CELL])
-        print(f"  {key[0]:10} {key[1]:6} available={len(cell):5} "
-              f"kept={min(len(cell), PER_CELL)}", flush=True)
+    for domain in sorted({domain for domain, _ in cells}):
+        human = cells.get((domain, "human"), [])
+        ai = cells.get((domain, "ai"), [])
+        rng.shuffle(human)
+        rng.shuffle(ai)
+        n_pairs = min(len(human), len(ai), PER_CELL)
+        for human_row, ai_row in zip(human[:n_pairs], ai[:n_pairs]):
+            n_words = min(len(human_row[4].split()), len(ai_row[4].split()),
+                          MAX_WORDS)
+            rows_out.append(_cut(human_row, n_words))
+            rows_out.append(_cut(ai_row, n_words))
+        print(f"  {domain:10} human={len(human):5} ai={len(ai):5} "
+              f"pairs kept={n_pairs}", flush=True)
     rng.shuffle(rows_out)
     return rows_out
 
