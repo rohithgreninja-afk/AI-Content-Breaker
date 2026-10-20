@@ -160,6 +160,8 @@ def select_candidates(data: dict, protocol: dict) -> dict:
     """Evaluate the frozen candidates using only training-group folds."""
     validate_protocol(protocol)
     X, y, groups = data["X"], data["y"], data["groups"]
+    if not np.any(data["words"] >= protocol["min_words"]):
+        raise ValueError("no training texts pass the fixed word gate")
     folds = _cv_indices(X, y, groups, random_state=42)
     assignment = {}
     for number, (fit, validation) in enumerate(folds):
@@ -178,8 +180,10 @@ def select_candidates(data: dict, protocol: dict) -> dict:
                 probabilities[validation] = estimator.predict_proba(X[validation])[:, 1]
             score = _scores(y[validation], probabilities[validation], data["words"][validation])
             fold_scores.append(score)
+            accuracy = score["at_least_50_words"]["accuracy"]
+            shown = f"{accuracy:.4f}" if accuracy is not None else "n/a (no gated rows)"
             print(f"{candidate['name']} fold {number}/5 "
-                  f"gated={score['at_least_50_words']['accuracy']:.4f}", flush=True)
+                  f"gated={shown}", flush=True)
         if not np.isfinite(probabilities).all():
             raise ValueError("CV did not predict every training row exactly once")
         source_scores = {source: _scores(y[data["sources"] == source],
@@ -241,6 +245,16 @@ def finalize() -> None:
         raise ValueError("training data or feature cache changed after selection")
     if set(selection["fold_assignment"]) != set(data["ids"]):
         raise ValueError("selection folds do not cover exactly the training IDs")
+    folds_by_group = {}
+    for row_id, group in zip(data["ids"], data["groups"]):
+        fold = selection["fold_assignment"][row_id]
+        if type(fold) is not int or not 0 <= fold < 5:
+            raise ValueError("invalid saved validation fold number")
+        if group in folds_by_group and folds_by_group[group] != fold:
+            raise ValueError("saved validation folds split a related group")
+        folds_by_group[group] = fold
+    if set(folds_by_group.values()) != set(range(5)):
+        raise ValueError("saved validation folds do not cover all five folds")
 
     rows, provenance = load_dataset_rows(), dataset_metadata()
     anchor = ModelScorer.load()
