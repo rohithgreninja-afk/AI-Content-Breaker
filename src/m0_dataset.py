@@ -279,7 +279,7 @@ def fetch_pool(name: str) -> list[dict]:
     if len(have) != len(rows):
         raise RuntimeError(f"{name}: duplicate row indices in cached pool")
 
-    info = _get_rows(dataset, config, split, 0, 1, revision)
+    info = _get_rows(dataset, config, split, 0, BLOCK_LEN, revision)
     total = int(info["num_rows_total"])
     # Same seed for every source: offsets differ anyway because the sizes do,
     # and it keeps the original MAGE pool's offsets valid.
