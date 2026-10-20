@@ -104,6 +104,23 @@ class FetchTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "does not match pinned"):
                 dataset._get_rows("repo", "default", "train", 0, 1, "pinned")
 
+    def test_transient_gateway_error_retries_without_rate_limit_delay(self):
+        failed = Mock(status_code=502)
+        success = Mock(status_code=200, headers={"x-revision": "pinned"})
+        success.json.return_value = {"rows": []}
+        with patch.object(dataset.requests, "get", side_effect=[failed, success]), \
+                patch.object(dataset.time, "sleep") as sleep:
+            self.assertEqual(dataset._get_rows("repo", "default", "train", 0, 1,
+                                               "pinned"), {"rows": []})
+        sleep.assert_called_once_with(1)
+
+    def test_non_retryable_errors_fail_immediately(self):
+        with patch.object(dataset.requests, "get", return_value=Mock(status_code=404)), \
+                patch.object(dataset.time, "sleep") as sleep:
+            with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
+                dataset._get_rows("repo", "default", "train", 0, 1)
+        sleep.assert_not_called()
+
     def test_resume_requires_complete_block_not_just_first_row(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = ("repo", "default", "train", "pinned", 1, dataset.map_mage)

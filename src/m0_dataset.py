@@ -164,7 +164,7 @@ def _get_rows(dataset: str, config: str, split: str, offset: int,
               "offset": offset, "length": length}
     for attempt in range(8):
         try:
-            response = requests.get(ROWS_API, params=params, timeout=90)
+            response = requests.get(ROWS_API, params=params, timeout=(10, 30))
             if response.status_code == 200:
                 if revision and response.headers.get("x-revision") != revision:
                     raise RuntimeError(
@@ -173,10 +173,14 @@ def _get_rows(dataset: str, config: str, split: str, offset: int,
                         f"pinned {revision}; refusing to mix dataset versions")
                 return response.json()
             status = response.status_code
+            if status not in (408, 429) and status < 500:
+                raise RuntimeError(f"rows API rejected {dataset} offset {offset}: "
+                                   f"HTTP {status}")
         except requests.RequestException as error:
             status = type(error).__name__
-        # 429 means slow down; back off hard rather than hammer the API.
-        wait = min(15 * 2 ** attempt, 300)
+        # Rate limits need long backoff; transient gateway errors usually
+        # recover quickly and should not stall a resumable fetch for minutes.
+        wait = min(15 * 2 ** attempt, 300) if status == 429 else min(2 ** attempt, 30)
         print(f"  {dataset} offset {offset}: {status}, retrying in {wait}s",
               flush=True)
         time.sleep(wait)
