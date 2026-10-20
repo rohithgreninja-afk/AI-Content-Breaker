@@ -63,8 +63,9 @@ _MODEL: dict = {}
 
 
 def _model() -> tuple[ModelScorer | None, str]:
-    """Load the saved M5b model once. Returns (model_or_None, note)."""
-    if "model" not in _MODEL:
+    """Reload when training replaces the artifact in a long-running process."""
+    signature = _model_signature()
+    if "model" not in _MODEL or _MODEL.get("signature") != signature:
         if not os.path.exists(MODEL_PATH):
             _MODEL["model"] = (None, "no saved model; run m5_scorer.py --train")
         else:
@@ -72,7 +73,16 @@ def _model() -> tuple[ModelScorer | None, str]:
                 _MODEL["model"] = (ModelScorer.load(), "")
             except ValueError as error:
                 _MODEL["model"] = (None, str(error))
+        _MODEL["signature"] = signature
     return _MODEL["model"]
+
+
+def _model_signature() -> tuple[int, int] | None:
+    try:
+        stat = os.stat(MODEL_PATH)
+        return stat.st_mtime_ns, stat.st_size
+    except FileNotFoundError:
+        return None
 
 
 def _head(name: str) -> None:
@@ -213,12 +223,17 @@ def _test_rows() -> list[dict]:
     if model.metadata.get("dataset_sha256") != provenance["dataset_sha256"]:
         raise ValueError("saved model does not match the current dataset; "
                          "run src/m5_scorer.py --train before --eval or --test")
+    if (model.metadata.get("manifest_sha256")
+            != provenance.get("manifest_sha256")):
+        raise ValueError("saved model does not match the dataset manifest; retrain")
     with open(DATA_PATH, encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     by_id = {row["id"]: row for row in rows}
     train_ids = model.metadata.get("train_ids", [])
     test_ids = model.metadata.get("test_ids", [])
     if (not train_ids or not test_ids or set(train_ids) & set(test_ids)
+            or len(train_ids) != len(set(train_ids))
+            or len(test_ids) != len(set(test_ids))
             or len(set(train_ids + test_ids)) != len(rows)
             or set(train_ids + test_ids) != set(by_id)):
         raise ValueError("saved model has invalid split provenance; retrain")
@@ -226,6 +241,8 @@ def _test_rows() -> list[dict]:
     if {groups[i] for i in train_ids} & {groups[i] for i in test_ids}:
         raise ValueError("saved model split contains related texts in both "
                          "training and test data; retrain")
+    # The object whose provenance was checked must also supply the scores.
+    _MODEL.update(model=(model, ""), signature=_model_signature())
     return [by_id[row_id] for row_id in test_ids]
 
 

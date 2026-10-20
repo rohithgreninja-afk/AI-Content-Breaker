@@ -189,6 +189,23 @@ class TestSavedHoldout(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid split"):
             pipeline._test_rows()
 
+    def test_rejects_repeated_saved_test_ids(self):
+        self.metadata["test_ids"] = ["b", "b"]
+        with self.assertRaisesRegex(ValueError, "invalid split"):
+            pipeline._test_rows()
+
+    def test_rejects_changed_group_manifest(self):
+        self.metadata["manifest_sha256"] = "original"
+        self.provenance["manifest_sha256"] = "edited"
+        with self.assertRaisesRegex(ValueError, "dataset manifest"):
+            pipeline._test_rows()
+
+    def test_scores_with_the_validated_instance(self):
+        self.addCleanup(pipeline._MODEL.clear)
+        pipeline._MODEL["model"] = ("stale", "")
+        pipeline._test_rows()
+        self.assertEqual(pipeline._model()[0].metadata, self.metadata)
+
     def test_rejects_related_texts_across_split(self):
         self.provenance["groups"] = ["same-question", "same-question"]
         with self.assertRaisesRegex(ValueError, "related texts"):
