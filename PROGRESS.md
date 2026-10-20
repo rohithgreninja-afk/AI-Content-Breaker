@@ -216,6 +216,40 @@
 - Run: `.venv\Scripts\python.exe src\m5_scorer.py --train`
 - Run tests: `.venv\Scripts\python.exe tests\test_m5_scorer.py`
 
+## Short-text abstain gate (pipeline, done)
+- **Bug:** short text was called AI. Root cause: every human training row is
+  96+ words (all RAID abstracts), and 7 M5a "low" rules fire when their
+  feature is 0.0 just because the text is short (no repeats, one sentence, no
+  punctuation). That gives 10.2 of 20.5 weight for free, against a break-even
+  of 8.0 set by RULE_BIAS. Human abstracts cut to 20 words: M5a calls 75% AI,
+  M5b 99%. No bias retune fixes it: at 30 words or fewer neither scorer beats
+  chance.
+- **Fix:** `pipeline.MIN_WORDS = 50` replaces the print-only `MIN_WORDS_NOTE =
+  20`. Below it `run_m5` sets `ctx["abstain"] = True` and
+  `ctx["verdicts"] = {"M5a": "abstain", "M5b": "abstain"}` (M5b is `None` when
+  no model is saved); `show_m5` prints no score; `--eval` counts abstained rows
+  and leaves them out of accuracy. Scores are still computed into ctx for
+  inspection, so read `ctx["verdicts"]`, not the raw score, for a label.
+- **Word unit:** `ctx["n_words"]` counts whitespace-separated pieces that hold
+  a letter, the unit the 96-word human minimum was measured in. M1 tokens were
+  tried first and rejected: a 2-word markdown link with a hex hash counted as
+  77 words and got a verdict.
+- `--eval` now (nltk tagger): 4 of 190 rows abstain (all AI); M5a 0.742 and
+  M5b 0.849 on the other 186. Human rows are unchanged ([[86, 14]] for both).
+- The built-in `SAMPLE` was lengthened to 53 words so a bare
+  `python src/pipeline.py` still shows a verdict.
+- **Not covered:** `m5_scorer.py --score FILE` and `RuleScorer/ModelScorer
+  .predict()` have no gate. **50-100 words is still weak**, because no human
+  training text is that short. Held-out human abstracts cut to 50 / 70 / 90
+  words: M5b calls 89% / 70% / 49% AI and M5a 40% / 36% / 29%, against 14% at
+  full length. A gate of 100 would remove most of that band but abstain on 16%
+  of full-length AI rows. The real fix is training on short windows.
+- **Environment trap seen while testing:** in the Claude desktop shell nltk
+  rejected the virtualised AppData path (`pathsec ... Unauthorized path`), and
+  `tagger_mode()` silently fell back. M5a recall dropped to 0.37 and M5b to
+  0.75. Copying `taggers/` into `.venv\nltk_data` fixed it. Check
+  `meta["tagger"] == "nltk"` before trusting any accuracy figure.
+
 ## Test suite (all green)
 | module | tests |
 |---|---|

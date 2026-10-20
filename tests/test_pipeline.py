@@ -19,6 +19,15 @@ SAMPLE = (
     "The cat sat on the mat. It was a warm afternoon, and the dog slept. "
     "However, the kitchen door stayed open all day."
 )
+# Over pipeline.MIN_WORDS, so the scorers give a verdict.
+LONG_SAMPLE = (
+    "The proposed method improves segmentation accuracy on noisy images. "
+    "Although the results are promising, we note that the training cost "
+    "remains high. Using a small graph, we show that the approach scales "
+    "to larger inputs without retuning. We also compare against three "
+    "baselines on two public benchmarks and report where each one fails, "
+    "with a short discussion of the remaining errors."
+)
 
 
 class TestRunPipeline(unittest.TestCase):
@@ -57,6 +66,66 @@ class TestRunPipeline(unittest.TestCase):
             self.assertIn(f"== {name} ==", out)
 
 
+class TestMinWordsAbstain(unittest.TestCase):
+    def test_short_text_abstains_in_both_scorers(self):
+        ctx = pipeline.run_pipeline(SAMPLE, show=False)
+        self.assertLess(ctx["n_words"], pipeline.MIN_WORDS)
+        self.assertTrue(ctx["abstain"])
+        self.assertEqual(ctx["verdicts"]["M5a"], "abstain")
+        self.assertIn(ctx["verdicts"]["M5b"], ("abstain", None))
+
+    def test_long_text_gets_a_verdict(self):
+        ctx = pipeline.run_pipeline(LONG_SAMPLE, show=False)
+        self.assertGreaterEqual(ctx["n_words"], pipeline.MIN_WORDS)
+        self.assertFalse(ctx["abstain"])
+        self.assertIn(ctx["verdicts"]["M5a"], ("ai", "human"))
+        self.assertIn(ctx["verdicts"]["M5b"], ("ai", "human", None))
+
+    def test_boundary_is_min_words_inclusive(self):
+        at = " ".join(["word"] * pipeline.MIN_WORDS) + "."
+        below = " ".join(["word"] * (pipeline.MIN_WORDS - 1)) + "."
+        self.assertFalse(pipeline.run_pipeline(at, show=False)["abstain"])
+        self.assertTrue(pipeline.run_pipeline(below, show=False)["abstain"])
+
+    def test_hashes_and_urls_count_as_one_word_each(self):
+        text = ("Fixed the flaky build, see commit "
+                "9f2c4e1a7b3d5f6e8a0c2b4d6f8e1a3c5b7d9f0e and "
+                "https://ci.example.com/job/42/run/7/log-2a3b4c5d.")
+        ctx = pipeline.run_pipeline(text, show=False)
+        self.assertEqual(ctx["n_words"], 9)
+        self.assertTrue(ctx["abstain"])
+
+    def test_pieces_without_letters_do_not_count(self):
+        ctx = pipeline.run_pipeline("> > 42 1,000 -- word", show=False)
+        self.assertEqual(ctx["n_words"], 1)
+
+    def test_built_in_sample_gets_a_verdict(self):
+        ctx = pipeline.run_pipeline(pipeline.SAMPLE, show=False)
+        self.assertFalse(ctx["abstain"])
+
+    def test_empty_text_abstains(self):
+        ctx = pipeline.run_pipeline("", show=False)
+        self.assertEqual(ctx["n_words"], 0)
+        self.assertEqual(ctx["verdicts"]["M5a"], "abstain")
+
+    def test_short_text_prints_no_verdict(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            pipeline.main(["--text", "I went to the store yesterday."])
+        out = buffer.getvalue()
+        self.assertIn("abstain: only 6 words", out)
+        self.assertNotIn("M5a rule score", out)
+        self.assertNotIn("M5b model score", out)
+
+    def test_long_text_prints_a_verdict(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            pipeline.main(["--text", LONG_SAMPLE])
+        out = buffer.getvalue()
+        self.assertIn("M5a rule score", out)
+        self.assertNotIn("abstain:", out)
+
+
 class TestExtensionPoint(unittest.TestCase):
     def test_an_added_stage_runs_last_and_sees_earlier_results(self):
         def run_extra(ctx):
@@ -87,6 +156,7 @@ class TestTestSplitRow(unittest.TestCase):
             pipeline.main(["--eval"])
         out = buffer.getvalue()
         self.assertIn("held-out test split: 190 rows", out)
+        self.assertIn(f"abstained (under {pipeline.MIN_WORDS} words)", out)
         self.assertIn("M5a rules", out)
 
 

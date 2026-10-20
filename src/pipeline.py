@@ -44,11 +44,15 @@ from m5_scorer import (  # noqa: E402
 SAMPLE = (
     "The proposed method improves segmentation accuracy on noisy images. "
     "Although the results are promising, we note that the training cost "
-    "remains high. Using a small graph, we show that the approach scales."
+    "remains high. Using a small graph, we show that the approach scales "
+    "to larger inputs without retuning. We also compare against three "
+    "baselines on two public benchmarks and report where each one fails."
 )
-# Both scorers were tuned on RAID rows of 40+ characters; far shorter text
-# scores unreliably.
-MIN_WORDS_NOTE = 20
+# Below this many words both scorers abstain instead of giving a verdict.
+# Every human training row is 96+ words, so shorter text is outside what
+# either scorer has seen: on human abstracts cut to 20 words, M5a calls 75%
+# of them AI and M5b 99%. Around 50 words M5a first rises clearly above chance.
+MIN_WORDS = 50
 SHOWN_FEATURES = (
     "parse_mean_depth", "parse_mean_branching", "sent_cv_len",
     "rep_word_entropy", "lex_type_token_ratio", "punct_dash_rate",
@@ -131,20 +135,41 @@ def show_m4(ctx: dict) -> None:
 
 
 # ---- M5 -------------------------------------------------------------------
+def _verdict(score: float | None, abstain: bool) -> str | None:
+    """Return "abstain", "ai" or "human"; None when there is no score (no model)."""
+    if score is None:
+        return None
+    if abstain:
+        return "abstain"
+    return "ai" if score >= 0.5 else "human"
+
+
 def run_m5(ctx: dict) -> None:
+    # Whitespace-separated pieces holding at least one letter: the unit the
+    # 96-word human minimum was measured in. M1 tokens would count a hex hash
+    # or URL as dozens of words and let junk through the gate.
+    ctx["n_words"] = sum(
+        1 for piece in ctx["text"].split() if any(c.isalpha() for c in piece))
+    ctx["abstain"] = ctx["n_words"] < MIN_WORDS
+    # Scores are still computed so the rule breakdown stays inspectable, but
+    # below MIN_WORDS they are not a verdict; read ctx["verdicts"], not 0.5.
     ctx["rules"] = RuleScorer().explain(ctx["features"])
     model, note = _model()
     ctx["model_score"] = model.score_features(ctx["features"]) if model else None
     ctx["model_note"] = note
+    ctx["verdicts"] = {
+        "M5a": _verdict(ctx["rules"]["score"], ctx["abstain"]),
+        "M5b": _verdict(ctx["model_score"], ctx["abstain"]),
+    }
 
 
 def show_m5(ctx: dict) -> None:
+    if ctx["abstain"]:
+        print(f"abstain: only {ctx['n_words']} words; both scorers need at "
+              f"least {MIN_WORDS} words for a verdict")
+        return
     rules = ctx["rules"]
-    n_words = sum(s["n_words"] for s in ctx["meta"]["sentences"])
-    if n_words < MIN_WORDS_NOTE:
-        print(f"note: only {n_words} words; scores are unreliable on text this short")
-    verdict = "ai" if rules["score"] >= 0.5 else "human"
-    print(f"M5a rule score = {rules['score']:.3f} -> {verdict} "
+    print(f"M5a rule score = {rules['score']:.3f} -> {ctx['verdicts']['M5a']} "
           f"(total {rules['total']:+.1f} of +-{rules['max_total']:.1f}, "
           f"{len(rules['fired'])} fired, {len(rules['missed'])} missed)")
     for name, value, threshold, weight in rules["fired"]:
@@ -152,8 +177,8 @@ def show_m5(ctx: dict) -> None:
     if ctx["model_score"] is None:
         print(f"M5b model: {ctx['model_note']}")
     else:
-        verdict = "ai" if ctx["model_score"] >= 0.5 else "human"
-        print(f"M5b model score = {ctx['model_score']:.3f} -> {verdict}")
+        print(f"M5b model score = {ctx['model_score']:.3f} -> "
+              f"{ctx['verdicts']['M5b']}")
 
 
 CORE_STAGES = (
@@ -195,6 +220,9 @@ def test_split_row(n: int) -> tuple[str, str]:
 
 
 def _report(name: str, scores: list[float], truth: list[int]) -> None:
+    if not truth:
+        print(f"{name:10} no rows left to score")
+        return
     pred = [1 if score >= 0.5 else 0 for score in scores]
     tp = sum(1 for p, t in zip(pred, truth) if p == 1 and t == 1)
     fp = sum(1 for p, t in zip(pred, truth) if p == 1 and t == 0)
@@ -208,20 +236,35 @@ def _report(name: str, scores: list[float], truth: list[int]) -> None:
 
 
 def evaluate_test_split() -> None:
-    """Push every held-out test row through the pipeline and report accuracy."""
+    """Push every held-out test row through the pipeline and report accuracy.
+
+    Rows under MIN_WORDS get no verdict, so they are counted and left out of
+    the accuracy figures rather than scored as right or wrong.
+    """
     rows = _test_rows()
-    truth = [1 if row["label"] == "ai" else 0 for row in rows]
+    truth: list[int] = []
     rule_scores: list[float] = []
     model_scores: list[float | None] = []
+    abstained = {"ai": 0, "human": 0}
     for row in rows:
         ctx = run_pipeline(row["text"], stages=CORE_STAGES, show=False)
+        if ctx["abstain"]:
+            abstained[row["label"]] += 1
+            continue
+        truth.append(1 if row["label"] == "ai" else 0)
         rule_scores.append(ctx["rules"]["score"])
         model_scores.append(ctx["model_score"])
+    n_ai = sum(1 for row in rows if row["label"] == "ai")
     print(f"held-out test split: {len(rows)} rows "
-          f"({sum(truth)} ai, {len(rows) - sum(truth)} human)")
+          f"({n_ai} ai, {len(rows) - n_ai} human)")
+    print(f"abstained (under {MIN_WORDS} words): "
+          f"{abstained['ai'] + abstained['human']} rows "
+          f"({abstained['ai']} ai, {abstained['human']} human); "
+          f"scoring the other {len(truth)}")
     _report("M5a rules", rule_scores, truth)
-    if None in model_scores:
-        print(f"M5b model: {ctx['model_note']}")
+    model, note = _model()
+    if model is None:
+        print(f"M5b model: {note}")
     else:
         _report("M5b model", model_scores, truth)
 

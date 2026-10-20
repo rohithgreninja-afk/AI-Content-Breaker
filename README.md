@@ -20,7 +20,7 @@ Python 3.14 in `.venv` at the repo root. Install deps with the venv interpreter:
 
 ## Current status
 
-M0–M5 are in place, with 103 tests passing. On the 760-row RAID sample
+M0–M5 are in place, with 112 tests passing. On the 760-row RAID sample
 (400 human / 360 AI):
 
 | scorer | accuracy | notes |
@@ -49,7 +49,7 @@ M0–M5 are in place, with 103 tests passing. On the 760-row RAID sample
 .venv\Scripts\python.exe src\m5_scorer.py --audit   # per-rule lift, for tuning
 .venv\Scripts\python.exe src\pipeline.py --test 1     # one held-out test row through M1-M5, stage by stage
 .venv\Scripts\python.exe src\pipeline.py --eval       # all 190 test rows: accuracy for both scorers
-.venv\Scripts\python.exe -m unittest discover -s tests  # run all 103 tests
+.venv\Scripts\python.exe -m unittest discover -s tests  # run all 112 tests
 ```
 
 Each module also runs standalone as a demo on one real row, e.g.
