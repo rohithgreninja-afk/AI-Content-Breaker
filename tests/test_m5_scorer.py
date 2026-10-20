@@ -28,6 +28,7 @@ from m5_scorer import (  # noqa: E402
     RuleScorer,
     _mean_squared,
     _cv_indices,
+    _print_model_report,
     _rule_fires,
     audit_rules,
     calibrate_rules,
@@ -376,6 +377,47 @@ class TestModelScorer(unittest.TestCase):
             metadata = {"dataset_sha256": "fingerprint", "test_ids": ["a", "b"]}
             ModelScorer(self.model.pipeline, metadata=metadata).save(path)
             self.assertEqual(ModelScorer.load(path).metadata, metadata)
+
+    def test_load_rejects_changed_feature_implementation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "m5.joblib")
+            model = ModelScorer(self.model.pipeline,
+                                metadata={"feature_extractor_sha256": "stale"})
+            model.save(path)
+            with self.assertRaisesRegex(ValueError, "extractor changed"):
+                ModelScorer.load(path)
+
+    def test_cli_report_binds_saved_model_to_exact_training_rows(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        groups = [f"pair-{i // 2}" for i in range(len(self.labels))]
+        rows = [{"id": f"row-{i}", "domain": "test:domain", "label": label,
+                 "text": "word " * (20 if i % 4 < 2 else 60)}
+                for i, label in enumerate(self.labels)]
+        provenance = {"dataset_sha256": "csv-hash", "manifest_sha256": "manifest-hash",
+                      "groups": groups, "dataset_sources": {"test": {"revision": "pinned"}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "m5.joblib")
+            with patch("m5_scorer.MODEL_PATH", path), redirect_stdout(io.StringIO()):
+                # save()'s default path is bound at definition; supply the test path explicitly.
+                original_save = ModelScorer.save
+                with patch.object(ModelScorer, "save", lambda model: original_save(model, path)):
+                    report = _print_model_report(self.features, self.labels, save=True,
+                                                 provenance=provenance, rows=rows)
+            saved = ModelScorer.load(path)
+            self.assertEqual(saved.metadata["dataset_sha256"], "csv-hash")
+            self.assertEqual(saved.metadata["test_ids"],
+                             [rows[i]["id"] for i in report["test_indices"]])
+            self.assertFalse(set(saved.metadata["train_groups"]) &
+                             set(saved.metadata["test_groups"]))
+            with open(os.path.join(tmp, "training_report.json"), encoding="utf-8") as handle:
+                record = json.load(handle)
+            evaluation = record["evaluation"]["overall"]
+            self.assertEqual(evaluation["n_scored"] + evaluation["n_abstained"],
+                             report["n_test"])
+            self.assertEqual(record["test_source_counts"], {"test": report["n_test"]})
+            self.assertIn("scikit-learn", record["versions"])
 
 
 class TestDatasetProvenance(unittest.TestCase):

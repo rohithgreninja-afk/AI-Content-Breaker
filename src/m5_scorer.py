@@ -17,6 +17,7 @@ CLI:
     python src/m5_scorer.py                 rule + model report on the sample
     python src/m5_scorer.py --audit         per-rule hit rates, for tuning
     python src/m5_scorer.py --train         fit, report, and save the model
+    python src/m5_scorer.py --train --select-c  choose C using training groups
     python src/m5_scorer.py --score FILE    score one text file with both
 """
 
@@ -375,6 +376,9 @@ class ModelScorer:
             raise ValueError(
                 f"saved model requires {metadata['tagger']} POS tagging; "
                 f"runtime uses {tagger_mode()}; restore the tagger or retrain")
+        source_hash = metadata.get("feature_extractor_sha256")
+        if source_hash and source_hash != feature_extractor_sha256():
+            raise ValueError("feature extractor changed since training; retrain with --train")
         return cls(pipeline=bundle["pipeline"], feature_names=names,
                    metadata=metadata)
 
@@ -390,6 +394,27 @@ def dataset_sha256(path: str = DATA_PATH) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def feature_extractor_sha256() -> str:
+    """Hash the source that defines the feature values, not only their names."""
+    digest = hashlib.sha256()
+    for filename in ("m1_lexer.py", "m2_symtab.py", "m3_parser.py", "m4_features.py"):
+        digest.update(filename.encode("utf-8") + b"\0")
+        with open(os.path.join(REPO_ROOT, "src", filename), "rb") as handle:
+            digest.update(handle.read().replace(b"\r\n", b"\n"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def runtime_versions() -> dict:
+    """Exact versions needed to reproduce a training run."""
+    import importlib.metadata
+    import platform
+
+    packages = {name: importlib.metadata.version(name)
+                for name in ("scikit-learn", "nltk", "numpy", "joblib", "requests")}
+    return {"python": platform.python_version(), **packages}
 
 
 def load_dataset_rows(path: str = DATA_PATH) -> list[dict]:
@@ -631,7 +656,7 @@ def _print_rule_report(features: list[dict], labels: list[str],
                        test_idx: list[int] | None = None) -> None:
     scorer = RuleScorer()
     result = evaluate_rules(features, labels, scorer)
-    print("== M5a rule-based scorer ==")
+    print("== M5a frozen MAGE rule baseline (descriptive) ==")
     print(f"rules={len(scorer.rules)} max_total={scorer.max_total:.1f} "
           f"scale={scorer.scale} bias={scorer.bias}")
     print(f"in-sample  n={result['n']} accuracy={result['accuracy']:.3f} "
@@ -640,9 +665,9 @@ def _print_rule_report(features: list[dict], labels: list[str],
     if test_idx is not None:
         held = evaluate_rules([features[i] for i in test_idx],
                               [labels[i] for i in test_idx], scorer)
-        # Thresholds were tuned on all rows, so this is the honest number to
-        # compare against M5b; it shares M5b's split.
-        print(f"held-out   n={held['n']} accuracy={held['accuracy']:.3f} "
+        # Historical rule fitting used another MAGE split, so this number is
+        # descriptive; only the newly trained model has this grouped holdout.
+        print(f"test rows  n={held['n']} accuracy={held['accuracy']:.3f} "
               f"precision={held['precision']:.3f} "
               f"recall={held['recall']:.3f} f1={held['f1']:.3f}")
     truth = [1 if label == AI_LABEL else 0 for label in labels]
@@ -678,26 +703,113 @@ def _print_audit(features: list[dict], labels: list[str]) -> None:
               f"brier={row['brier']:.4f} sep={row['separation']:+.3f}{marker}")
 
 
+def _classification_metrics(labels, probabilities) -> dict:
+    """Small JSON-safe metrics record, with AI always the positive class."""
+    from sklearn.metrics import (accuracy_score, confusion_matrix,
+                                 precision_recall_fscore_support, roc_auc_score)
+
+    if not labels:
+        return {"n": 0, "accuracy": None, "roc_auc": None}
+    truth = [int(label == AI_LABEL) for label in labels]
+    predictions = [int(probability >= 0.5) for probability in probabilities]
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        truth, predictions, average="binary", zero_division=0)
+    return {"n": len(labels), "accuracy": float(accuracy_score(truth, predictions)),
+            "precision": float(precision), "recall": float(recall), "f1": float(f1),
+            "roc_auc": (float(roc_auc_score(truth, probabilities))
+                        if len(set(truth)) == 2 else None),
+            "confusion_matrix": confusion_matrix(truth, predictions, labels=[0, 1]).tolist()}
+
+
+def _heldout_metrics(model: ModelScorer, features: list[dict],
+                     rows: list[dict], test_idx: list[int]) -> dict:
+    """Metrics for every source and for the pipeline's 50-word abstention gate."""
+    rule_scorer = RuleScorer()
+    predictions = {i: model.score_features(features[i]) for i in test_idx}
+    rule_predictions = {i: rule_scorer.score_features(features[i]) for i in test_idx}
+
+    def summarize(indices):
+        scored = [i for i in indices if sum(any(c.isalpha() for c in word)
+                  for word in rows[i]["text"].split()) >= 50]
+        def metrics(subset):
+            labels = [rows[i]["label"] for i in subset]
+            return {"model": _classification_metrics(labels, [predictions[i] for i in subset]),
+                    "rules": _classification_metrics(labels, [rule_predictions[i] for i in subset])}
+        return {"n_test": len(indices), "n_scored": len(scored),
+                "n_abstained": len(indices) - len(scored),
+                "coverage": len(scored) / len(indices) if indices else 0.0,
+                "all_rows": metrics(indices), "at_least_50_words": metrics(scored)}
+
+    source_names = sorted({rows[i]["domain"].split(":", 1)[0] for i in test_idx})
+    return {"overall": summarize(test_idx),
+            "per_source": {source: summarize([i for i in test_idx
+                           if rows[i]["domain"].split(":", 1)[0] == source])
+                           for source in source_names},
+            "rule_evaluation_note": "Frozen rules were tuned on the previous MAGE split; "
+                                    "their metrics are descriptive, not an independent holdout."}
+
+
 def _print_model_report(features: list[dict], labels: list[str],
-                        save: bool = False) -> None:
+                        save: bool = False, provenance: dict | None = None,
+                        rows: list[dict] | None = None, select_c: bool = False) -> dict:
+    provenance = provenance or {}
+    groups = provenance.get("groups")
+    vectors = [to_vector(f) for f in features]
+    selection = ModelScorer.select_C(vectors, labels, groups=groups) if select_c else None
+    C = selection["best_C"] if selection else ModelScorer.DEFAULT_C
     model = ModelScorer()
-    report = model.fit([to_vector(f) for f in features], labels)
+    report = model.fit(vectors, labels, groups=groups, C=C)
     print("== M5b logistic regression ==")
     print(f"train={report['n_train']} test={report['n_test']} "
-          f"features={report['n_features']} C={report['C']:g}")
+          f"features={report['n_features']} C={report['C']:g} "
+          f"split={report['split_method']}")
     print(f"train_accuracy={report['train_accuracy']:.3f} "
           f"test_accuracy={report['test_accuracy']:.3f} "
           f"test_roc_auc={report['test_roc_auc']:.3f}")
     print(f"5-fold CV accuracy on train={report['cv_mean']:.3f} "
           f"+-{report['cv_std']:.3f}")
-    print(f"confusion matrix [[hh, ha], [ah, aa]] = "
-          f"{report['confusion_matrix']}")
+    if selection:
+        print(f"C selected using training groups only: {selection['best_C']:g}")
+    print(f"confusion matrix [[hh, ha], [ah, aa]] = {report['confusion_matrix']}")
     print(report["report"])
     print("top coefficients (standardised; + pushes toward AI):")
     for name, weight in model.top_coefficients(15):
         print(f"  {name:32} {weight:+8.4f}")
     if save:
+        from datetime import datetime, timezone
+        from collections import Counter
+
+        if rows is None or not provenance.get("dataset_sha256") or groups is None:
+            raise ValueError("saving a training run requires verified dataset provenance")
+        train_idx, test_idx = report["train_indices"], report["test_indices"]
+        model.metadata = {
+            "schema_version": 1, "dataset_sha256": provenance["dataset_sha256"],
+            "manifest_sha256": provenance["manifest_sha256"],
+            "dataset_sources": provenance["dataset_sources"],
+            "train_ids": [rows[i]["id"] for i in train_idx],
+            "test_ids": [rows[i]["id"] for i in test_idx],
+            "train_groups": sorted({groups[i] for i in train_idx}),
+            "test_groups": sorted({groups[i] for i in test_idx}),
+            "tagger": tagger_mode(), "split_method": report["split_method"],
+            "random_state": 42, "test_size": 0.25,
+            "feature_names": list(FEATURE_NAMES),
+            "feature_extractor_sha256": feature_extractor_sha256(),
+            "versions": runtime_versions(),
+            "trained_at_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        saved_report = {**model.metadata, "metrics": report, "c_selection": selection,
+                        "test_source_counts": dict(Counter(rows[i]["domain"].split(":", 1)[0]
+                                                           for i in test_idx)),
+                        "evaluation": _heldout_metrics(model, features, rows, test_idx)}
         print(f"\nsaved -> {model.save()}")
+        report_path = os.path.join(os.path.dirname(MODEL_PATH), "training_report.json")
+        temporary = report_path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(saved_report, handle, indent=2, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
+        os.replace(temporary, report_path)
+        print(f"report -> {report_path}")
+    return report
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -724,24 +836,27 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if not os.path.exists(DATA_PATH):
-        print(f"dataset not found: {DATA_PATH}\n"
-              f"regenerate it with: .venv\\Scripts\\python.exe "
-              f"src\\m0_dataset.py")
-        return
+        raise SystemExit(f"dataset not found: {DATA_PATH}\n"
+                         f"regenerate it with: .venv\\Scripts\\python.exe "
+                         f"src\\m0_dataset.py")
 
     print(f"loading {DATA_PATH} ...")
+    provenance = dataset_metadata()
+    rows = load_dataset_rows()
     features, labels = load_dataset()
     counts = {label: labels.count(label) for label in sorted(set(labels))}
     print(f"{len(labels)} rows {counts}\n")
 
+    train_idx, test_idx = split_indices(labels, groups=provenance["groups"])
     if "--audit" in argv:
-        _print_audit(features, labels)
+        print("Rule audit and calibration use training groups only.")
+        _print_audit([features[i] for i in train_idx], [labels[i] for i in train_idx])
         return
 
-    _, test_idx = split_indices(labels)
     _print_rule_report(features, labels, test_idx)
     print()
-    _print_model_report(features, labels, save="--train" in argv)
+    _print_model_report(features, labels, save="--train" in argv,
+                        provenance=provenance, rows=rows, select_c="--select-c" in argv)
 
 
 if __name__ == "__main__":
