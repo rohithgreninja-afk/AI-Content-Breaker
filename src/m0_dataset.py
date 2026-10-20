@@ -279,7 +279,18 @@ def fetch_pool(name: str) -> list[dict]:
     if len(have) != len(rows):
         raise RuntimeError(f"{name}: duplicate row indices in cached pool")
 
-    info = _get_rows(dataset, config, split, 0, BLOCK_LEN, revision)
+    cached_metadata = None
+    if os.path.exists(metadata_path):
+        with open(metadata_path, encoding="utf-8") as handle:
+            cached_metadata = json.load(handle)
+    # A verified cache already records split size. The startup hub revision
+    # check and each new block's x-revision still guard source identity; no
+    # rows-server request is needed just to reuse a completed local sample.
+    if cached_metadata and cached_metadata.get("revision") == revision:
+        info = {"num_rows_total": cached_metadata["num_rows_total"],
+                "partial": cached_metadata["partial"]}
+    else:
+        info = _get_rows(dataset, config, split, 0, BLOCK_LEN, revision)
     total = int(info["num_rows_total"])
     # Same seed for every source: offsets differ anyway because the sizes do,
     # and it keeps the original MAGE pool's offsets valid.
@@ -290,8 +301,7 @@ def fetch_pool(name: str) -> list[dict]:
                 "partial": bool(info.get("partial", False)),
                 "seed": SEED, "block_length": BLOCK_LEN}
     if os.path.exists(metadata_path):
-        with open(metadata_path, encoding="utf-8") as handle:
-            metadata = json.load(handle)
+        metadata = cached_metadata
         if any(metadata.get(key) != value for key, value in identity.items()):
             raise RuntimeError(f"{name}: cache identity differs from pinned source")
         if metadata.get("sample_offsets", offsets) != offsets:
