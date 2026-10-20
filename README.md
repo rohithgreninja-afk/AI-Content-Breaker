@@ -64,20 +64,25 @@ on a new text file does not require downloading the training data.
 ## Datasets the model was trained on
 
 The classifier uses balanced samples of these **training splits**, rather than
-the full datasets or their official test sets:
+the full datasets or their official test sets. The current corpus has 7,490
+texts (3,745 human / 3,745 AI):
 
 - [MAGE (`yaful/MAGE`)](https://huggingface.co/datasets/yaful/MAGE): human and
   generated text across ten domains, including Reddit, reviews, summarization,
   stories, question answering, and scientific text. Source label `1` means
-  human; `0` means machine.
+  human; `0` means machine. **4,734 sampled texts.**
 - [HC3 (`Hello-SimpleAI/HC3`)](https://huggingface.co/datasets/Hello-SimpleAI/HC3):
   human and ChatGPT answers to the same questions; English `all` configuration.
+  **1,956 sampled texts across five domains.**
 - [GPT-wiki-intro (`aadityaubhat/GPT-wiki-intro`)](https://huggingface.co/datasets/aadityaubhat/GPT-wiki-intro):
   Wikipedia introductions paired with `text-curie-001` introductions.
+  **600 sampled texts.**
 - [RAID (`liamdugan/raid`)](https://huggingface.co/datasets/liamdugan/raid):
   human and multiple-generator text, using only `attack == "none"`. The rows
   API exposes a partial training split, so observed coverage is recorded in
-  the report; the sample does not represent all RAID domains or attacks.
+  the report. **200 sampled texts, all news:** the seeded pool had no clean
+  human examples in its other domains, which were excluded from balancing.
+  The sample does not represent all RAID domains or attacks.
 
 M0 balances human/AI counts within each source/domain and truncates matched
 pairs to identical lengths between 20 and 300 words. It removes duplicate
