@@ -1,6 +1,6 @@
-requests
-nltk
-scikit-learn
-numpy
-datasets
-joblib
+requests==2.34.2
+nltk==3.10.3
+scikit-learn==1.9.1
+numpy==2.5.4
+datasets==5.1.0
+joblib==1.6.0

@@ -5,10 +5,14 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Project data & model artifacts (regenerated locally; RAID subset not redistributed)
+# Generated third-party samples and resumable fetch metadata
 data/*.csv
 data/*.jsonl
-models/
+data/*.json
+models/*
+# Ship the small trained classifier and its provenance, not the source corpora.
+!models/m5_logreg.joblib
+!models/training_report.json
 
 # nltk downloaded data if placed in-repo
 nltk_data/
