@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "purpose": "Improve the fixed 89-feature classifier using saved training rows only.",
+  "split_policy": "Reuse saved train_ids/test_ids and related-text groups without resplitting. Selection may extract and fit only training rows.",
+  "cross_validation": {"method": "StratifiedGroupKFold", "n_splits": 5, "shuffle": true, "random_state": 42},
+  "primary_metric": "pooled out-of-fold accuracy on texts passing the unchanged 50-word gate",
+  "tie_breakers": ["pooled all-row out-of-fold accuracy", "earlier candidate in this file"],
+  "min_words": 50,
+  "probability_cutoff": 0.5,
+  "minimum_primary_gain_over_baseline": 0.01,
+  "maximum_all_row_regression": 0.01,
+  "baseline": "logreg_c10",
+  "test_policy": "Freeze and commit the training-only selection before final fitting and test evaluation. Evaluate the winner once; never switch configurations based on test results. This is a previously published internal holdout, not a new unseen benchmark.",
+  "preprocessing_policy": "All learned preprocessing is fitted within each training fold. HGB early stopping is disabled. No rule-score blending or test-based threshold tuning.",
+  "candidates": [
+    {"name": "logreg_c10", "config": {"family": "logreg", "C": 10.0}},
+    {"name": "logreg_c1", "config": {"family": "logreg", "C": 1.0}},
+    {"name": "hgb_leaf7", "config": {"family": "hist_gradient_boosting", "max_iter": 200, "learning_rate": 0.08, "max_leaf_nodes": 7, "min_samples_leaf": 30, "l2_regularization": 5.0}},
+    {"name": "hgb_leaf15", "config": {"family": "hist_gradient_boosting", "max_iter": 250, "learning_rate": 0.06, "max_leaf_nodes": 15, "min_samples_leaf": 30, "l2_regularization": 5.0}},
+    {"name": "hgb_leaf15_regularized", "config": {"family": "hist_gradient_boosting", "max_iter": 400, "learning_rate": 0.04, "max_leaf_nodes": 15, "min_samples_leaf": 40, "l2_regularization": 10.0}},
+    {"name": "hgb_leaf31", "config": {"family": "hist_gradient_boosting", "max_iter": 250, "learning_rate": 0.06, "max_leaf_nodes": 31, "min_samples_leaf": 30, "l2_regularization": 10.0}},
+    {"name": "extra_trees", "config": {"family": "extra_trees", "n_estimators": 300, "min_samples_leaf": 5, "max_features": 0.7}},
+    {"name": "soft_vote", "config": {"family": "soft_vote", "logreg_C": 10.0, "hgb": {"max_iter": 250, "learning_rate": 0.06, "max_leaf_nodes": 15, "min_samples_leaf": 30, "l2_regularization": 5.0}, "weights": [1.0, 2.0]}}
+  ]
+}
