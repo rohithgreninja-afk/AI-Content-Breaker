@@ -19,7 +19,7 @@ from m4_features import FEATURE_NAMES, extract_features, to_vector
 from m3_parser import tagger_mode
 from m5_estimators import build_estimator
 from m5_scorer import (DATA_PATH, MODEL_PATH, REPO_ROOT, ModelScorer, _classification_metrics,
-                       _cv_indices, dataset_metadata, dataset_sha256, feature_extractor_sha256,
+                       _cv_indices, _heldout_metrics, dataset_metadata, dataset_sha256, feature_extractor_sha256,
                        load_dataset_rows, runtime_versions)
 
 ROOT = Path(REPO_ROOT)
@@ -196,6 +196,110 @@ def select_candidates(data: dict, protocol: dict) -> dict:
             "winner": winner["name"], "estimator_config": winner["config"],
             "test_evaluated_during_selection": False,
             "cv_note": "Selection CV is optimistic for the selected winner; it is not a nested-CV or independent-test estimate."}
+
+
+def committed_json(path: Path) -> str:
+    """Require the experiment record on disk to equal its committed version."""
+    import subprocess
+
+    relative = path.resolve().relative_to(ROOT).as_posix()
+    try:
+        committed = subprocess.check_output(["git", "show", f"HEAD:{relative}"], cwd=ROOT)
+        revision = subprocess.check_output(
+            ["git", "log", "-1", "--format=%H", "--", relative], cwd=ROOT, text=True).strip()
+    except subprocess.CalledProcessError as error:
+        raise ValueError(f"commit {relative} before final test evaluation") from error
+    if json_digest(json.loads(committed)) != json_digest(json.loads(path.read_text(encoding="utf-8"))):
+        raise ValueError(f"commit changes to {relative} before final test evaluation")
+    return revision
+
+
+def finalize() -> None:
+    """Fit the committed winner, then evaluate the fixed holdout without tuning."""
+    from datetime import datetime, timezone
+
+    protocol = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
+    selection = json.loads(SELECTION_PATH.read_text(encoding="utf-8"))
+    validate_protocol(protocol)
+    protocol_commit = committed_json(PROTOCOL_PATH)
+    selection_commit = committed_json(SELECTION_PATH)
+    if selection.get("protocol_sha256") != json_digest(protocol):
+        raise ValueError("selection does not match the committed protocol")
+    recipes = [{"name": result["name"], "config": result["config"]}
+               for result in selection["candidates"]]
+    if recipes != protocol["candidates"]:
+        raise ValueError("selection candidate recipes differ from the protocol")
+    winner = choose_candidate(selection["candidates"], protocol)
+    if (winner["name"] != selection["winner"]
+            or winner["config"] != selection["estimator_config"]
+            or selection.get("test_evaluated_during_selection") is not False):
+        raise ValueError("invalid training-only winner record")
+    data, cache_metadata = prepare_training()
+    if (selection["training_identity"] != cache_metadata["identity"]
+            or selection["training_feature_cache_sha256"] != cache_metadata["cache_sha256"]):
+        raise ValueError("training data or feature cache changed after selection")
+    if set(selection["fold_assignment"]) != set(data["ids"]):
+        raise ValueError("selection folds do not cover exactly the training IDs")
+
+    rows, provenance = load_dataset_rows(), dataset_metadata()
+    anchor = ModelScorer.load()
+    train, test = fixed_partition(rows, provenance, anchor.metadata)
+    previous_model_sha256 = dataset_sha256(MODEL_PATH)
+    model = ModelScorer(pipeline=build_estimator(winner["config"]))
+    reference = ModelScorer(pipeline=build_estimator({"family": "logreg", "C": 10.0}))
+    with threadpool_limits(limits=2):
+        model.pipeline.fit(data["X"], data["y"])
+        reference.pipeline.fit(data["X"], data["y"])
+        train_probabilities = model.pipeline.predict_proba(data["X"])[:, 1]
+    # Selection and full-training fits are finished before the first test text
+    # is transformed. No subsequent decision reads these test results.
+    features = [None] * len(rows)
+    for index, vector in zip(train, data["X"]):
+        features[index] = dict(zip(FEATURE_NAMES, vector))
+    for position, index in enumerate(test, 1):
+        features[index] = extract_features(rows[index]["text"])
+        if position % 500 == 0:
+            print(f"final holdout features: {position}/{len(test)}", flush=True)
+    with threadpool_limits(limits=2):
+        evaluation = _heldout_metrics(model, features, rows, test)
+        baseline = _heldout_metrics(reference, features, rows, test)
+    model.metadata = {
+        "schema_version": 1, "dataset_sha256": provenance["dataset_sha256"],
+        "manifest_sha256": provenance["manifest_sha256"],
+        "dataset_sources": provenance["dataset_sources"],
+        "train_ids": [rows[i]["id"] for i in train], "test_ids": [rows[i]["id"] for i in test],
+        "train_groups": sorted({provenance["groups"][i] for i in train}),
+        "test_groups": sorted({provenance["groups"][i] for i in test}),
+        "tagger": tagger_mode(), "feature_names": list(FEATURE_NAMES),
+        "feature_extractor_sha256": feature_extractor_sha256(),
+        "split_method": "stratified_group", "random_state": 42, "test_size": 0.25,
+        "versions": runtime_versions(), "trained_at_utc": datetime.now(timezone.utc).isoformat(),
+        "estimator_config": winner["config"], "selection_sha256": json_digest(selection),
+        "training_protocol_sha256": json_digest(protocol), "selection_commit": selection_commit,
+        "protocol_commit": protocol_commit,
+        "training_feature_cache_sha256": cache_metadata["cache_sha256"],
+    }
+    cv_scores = [fold["all_rows"]["accuracy"] for fold in winner["fold_metrics"]]
+    overall = evaluation["overall"]["all_rows"]["model"]
+    metrics = {"C": winner["config"].get("C"), "n_train": len(train), "n_test": len(test),
+               "n_features": len(FEATURE_NAMES), "split_method": "stratified_group",
+               "train_accuracy": float(np.mean((train_probabilities >= 0.5) == data["y"])),
+               "test_accuracy": overall["accuracy"], "test_roc_auc": overall["roc_auc"],
+               "cv_mean": float(np.mean(cv_scores)), "cv_std": float(np.std(cv_scores)),
+               "cv_scores": cv_scores, "train_indices": train, "test_indices": test,
+               "confusion_matrix": overall["confusion_matrix"]}
+    report = {**model.metadata, "metrics": metrics, "c_selection": None,
+              "test_source_counts": dict(Counter(rows[i]["domain"].split(":", 1)[0] for i in test)),
+              "evaluation": evaluation, "baseline_evaluation": baseline,
+              "baseline_estimator_config": {"family": "logreg", "C": 10.0},
+              "previous_model_sha256": previous_model_sha256,
+              "model_selection": {"winner": winner["name"], "metrics": winner["metrics"],
+                                  "test_used_for_selection": False, "cv_note": selection["cv_note"]},
+              "holdout_note": "The same previously published internal holdout is evaluated only after the training-only winner is committed. It is not a new unseen external benchmark."}
+    model.save()
+    write_json(report, ROOT / "models" / "training_report.json")
+    print(f"Saved frozen winner {winner['name']}: all-row accuracy={overall['accuracy']:.4f}, "
+          f"gated={evaluation['overall']['at_least_50_words']['model']['accuracy']:.4f}")
 
 
 def main(argv=None) -> None:
