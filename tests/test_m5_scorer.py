@@ -7,11 +7,14 @@ depend on data/train_clean.csv (which is gitignored and regenerable).
 from __future__ import annotations
 
 import math
+import csv
+import json
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -24,9 +27,12 @@ from m5_scorer import (  # noqa: E402
     ModelScorer,
     RuleScorer,
     _mean_squared,
+    _cv_indices,
     _rule_fires,
     audit_rules,
     calibrate_rules,
+    dataset_metadata,
+    dataset_sha256,
     evaluate_rules,
     split_indices,
 )
@@ -331,6 +337,91 @@ class TestModelScorer(unittest.TestCase):
         self.assertEqual(len(result["grid"]), 3)
         self.assertEqual(result["best_cv"],
                          max(row[1] for row in result["grid"]))
+
+    def test_grouped_fit_keeps_pairs_out_of_train_and_cv(self) -> None:
+        import numpy as np
+
+        groups = [f"question-{i // 2}" for i in range(len(self.labels))]
+        model = ModelScorer()
+        report = model.fit(self.vectors, self.labels, groups=groups)
+        train, test = report["train_indices"], report["test_indices"]
+        self.assertFalse({groups[i] for i in train} & {groups[i] for i in test})
+        self.assertEqual((train, test), split_indices(self.labels, groups=groups))
+        # Scaling sees the training rows only, even when a held-out value is extreme.
+        X = np.asarray(self.vectors)
+        np.testing.assert_allclose(model.pipeline.named_steps["scale"].mean_,
+                                   X[train].mean(axis=0))
+        y = np.asarray([label == AI_LABEL for label in self.labels])[train]
+        train_groups = np.asarray(groups)[train]
+        for fit, validation in _cv_indices(X[train], y, train_groups):
+            self.assertFalse(set(train_groups[fit]) & set(train_groups[validation]))
+        self.assertEqual(len(report["cv_scores"]), 5)
+
+    def test_load_rejects_incompatible_tagger_and_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "m5.joblib")
+            model = ModelScorer(self.model.pipeline, metadata={"tagger": "nltk"})
+            model.save(path)
+            with patch("m5_scorer.tagger_mode", return_value="fallback"):
+                with self.assertRaisesRegex(ValueError, "requires nltk"):
+                    ModelScorer.load(path)
+            model.metadata = {"schema_version": 999}
+            model.save(path)
+            with self.assertRaisesRegex(ValueError, "schema"):
+                ModelScorer.load(path)
+
+    def test_metadata_survives_save_load(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "m5.joblib")
+            metadata = {"dataset_sha256": "fingerprint", "test_ids": ["a", "b"]}
+            ModelScorer(self.model.pipeline, metadata=metadata).save(path)
+            self.assertEqual(ModelScorer.load(path).metadata, metadata)
+
+
+class TestDatasetProvenance(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = os.path.join(self.tmp.name, "train_clean.csv")
+        with open(self.path, "w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["id", "model", "label", "domain", "text"])
+            writer.writerow(["a", "human", "human", "hc3:test", HUMANISH])
+            writer.writerow(["b", "chatgpt", "ai", "hc3:test", AIISH])
+        self.manifest = {"csv_sha256": dataset_sha256(self.path),
+                         "row_groups": {"a": "same-question", "b": "same-question"},
+                         "sources": {"hc3": {"revision": "pinned"}}}
+
+    def write_manifest(self):
+        with open(os.path.join(self.tmp.name, "train_manifest.json"),
+                  "w", encoding="utf-8") as handle:
+            json.dump(self.manifest, handle)
+
+    def test_manifest_preserves_csv_group_order(self):
+        self.write_manifest()
+        metadata = dataset_metadata(self.path)
+        self.assertEqual(metadata["row_ids"], ["a", "b"])
+        self.assertEqual(metadata["groups"], ["same-question"] * 2)
+        self.assertEqual(metadata["dataset_sources"], self.manifest["sources"])
+
+    def test_changed_dataset_rejects_stale_manifest(self):
+        self.write_manifest()
+        with open(self.path, "a", encoding="utf-8") as handle:
+            handle.write("\n")
+        with self.assertRaisesRegex(ValueError, "differs from its manifest"):
+            dataset_metadata(self.path)
+
+    def test_missing_or_incomplete_manifest_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "manifest missing"):
+            dataset_metadata(self.path)
+        self.manifest["row_groups"].pop("b")
+        self.write_manifest()
+        with self.assertRaisesRegex(ValueError, "group IDs"):
+            dataset_metadata(self.path)
+
+    def test_unknown_label_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "labels"):
+            split_indices(["ai", "unknown", "human", "human"])
 
 
 if __name__ == "__main__":

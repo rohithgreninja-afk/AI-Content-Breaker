@@ -23,6 +23,8 @@ CLI:
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import math
 import os
 import sys
@@ -31,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from m1_lexer import tokenize  # noqa: E402
 from m2_symtab import build_symtab  # noqa: E402
-from m3_parser import parse_tokens  # noqa: E402
+from m3_parser import parse_tokens, tagger_mode  # noqa: E402
 from m4_features import (  # noqa: E402
     FEATURE_NAMES,
     extract_features,
@@ -186,9 +188,11 @@ class ModelScorer:
     reports held-out accuracy and `save`/`load` persist it.
     """
 
-    def __init__(self, pipeline=None, feature_names=FEATURE_NAMES) -> None:
+    def __init__(self, pipeline=None, feature_names=FEATURE_NAMES,
+                 metadata: dict | None = None) -> None:
         self.pipeline = pipeline
         self.feature_names = tuple(feature_names)
+        self.metadata = dict(metadata or {})
 
     # Chosen by 5-fold CV on the training split alone (never the test split),
     # over C in 0.01..100: on the MAGE sample train CV accuracy climbs
@@ -209,7 +213,8 @@ class ModelScorer:
         ])
 
     def fit(self, vectors, labels, test_size: float = 0.25,
-            random_state: int = 42, C: float | None = None) -> dict:
+            random_state: int = 42, C: float | None = None,
+            groups=None) -> dict:
         """Train on a split of (vectors, labels) and return a report.
 
         labels are the strings "ai" / "human"; they are mapped to 1 / 0 so the
@@ -222,15 +227,19 @@ class ModelScorer:
             confusion_matrix,
             roc_auc_score,
         )
-        from sklearn.model_selection import cross_val_score, train_test_split
+        from sklearn.model_selection import cross_val_score
 
         C = self.DEFAULT_C if C is None else C
         X = np.asarray(vectors, dtype=float)
         y = np.asarray([1 if label == AI_LABEL else 0 for label in labels],
                        dtype=int)
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y)
+        train_idx, test_idx = split_indices(
+            list(labels), test_size, random_state, groups=groups)
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+        train_groups = (np.asarray(groups)[train_idx]
+                        if groups is not None else None)
 
         self.pipeline = self._build_pipeline(C=C)
         self.pipeline.fit(X_train, y_train)
@@ -241,8 +250,9 @@ class ModelScorer:
 
         # 5-fold CV on the TRAINING split only. Running it over train+test
         # would leak the test rows into a number reported beside test accuracy.
-        cv = cross_val_score(self._build_pipeline(C=C), X_train, y_train, cv=5,
-                             scoring="accuracy")
+        cv_splits = _cv_indices(X_train, y_train, train_groups, random_state)
+        cv = cross_val_score(self._build_pipeline(C=C), X_train, y_train,
+                             cv=cv_splits, scoring="accuracy", error_score="raise")
 
         return {
             "C": float(C),
@@ -254,6 +264,11 @@ class ModelScorer:
             "test_roc_auc": float(roc_auc_score(y_test, test_prob)),
             "cv_mean": float(cv.mean()),
             "cv_std": float(cv.std()),
+            "cv_scores": cv.tolist(),
+            "train_indices": list(map(int, train_idx)),
+            "test_indices": list(map(int, test_idx)),
+            "split_method": ("stratified_group" if groups is not None
+                             else "stratified_rows"),
             "confusion_matrix": confusion_matrix(y_test, test_pred).tolist(),
             "report": classification_report(
                 y_test, test_pred, target_names=[HUMAN_LABEL, AI_LABEL],
@@ -263,7 +278,8 @@ class ModelScorer:
     @classmethod
     def select_C(cls, vectors, labels, grid=(0.01, 0.03, 0.1, 0.3, 1.0, 3.0,
                                              10.0, 30.0, 100.0),
-                 test_size: float = 0.25, random_state: int = 42) -> dict:
+                 test_size: float = 0.25, random_state: int = 42,
+                 groups=None) -> dict:
         """Choose C by 5-fold CV on the training split only.
 
         The test split is never touched, so the accuracy fit() reports
@@ -276,13 +292,19 @@ class ModelScorer:
         X = np.asarray(vectors, dtype=float)
         y = np.asarray([1 if label == AI_LABEL else 0 for label in labels],
                        dtype=int)
-        train_idx, _ = split_indices(list(labels), test_size, random_state)
+        train_idx, _ = split_indices(list(labels), test_size, random_state,
+                                     groups=groups)
+        train_groups = (np.asarray(groups)[train_idx]
+                        if groups is not None else None)
+        cv_splits = _cv_indices(X[train_idx], y[train_idx], train_groups,
+                               random_state)
 
         rows = []
         best = None
         for C in grid:
             cv = cross_val_score(cls._build_pipeline(C=C), X[train_idx],
-                                 y[train_idx], cv=5, scoring="accuracy")
+                                 y[train_idx], cv=cv_splits, scoring="accuracy",
+                                 error_score="raise")
             rows.append((float(C), float(cv.mean()), float(cv.std())))
             if best is None or cv.mean() > best[1]:
                 best = (float(C), float(cv.mean()))
@@ -326,10 +348,12 @@ class ModelScorer:
         import joblib
 
         self._require_fitted()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        temporary = str(path) + ".tmp"
         joblib.dump(
-            {"pipeline": self.pipeline, "feature_names": self.feature_names},
-            path)
+            {"pipeline": self.pipeline, "feature_names": self.feature_names,
+             "metadata": self.metadata}, temporary)
+        os.replace(temporary, path)
         return path
 
     @classmethod
@@ -344,12 +368,70 @@ class ModelScorer:
                 "saved model's feature order does not match M4's "
                 f"FEATURE_NAMES ({len(names)} vs {len(FEATURE_NAMES)}); "
                 "retrain with --train")
-        return cls(pipeline=bundle["pipeline"], feature_names=names)
+        metadata = bundle.get("metadata", {})
+        if metadata.get("schema_version", 1) != 1:
+            raise ValueError("unsupported saved model schema; retrain with --train")
+        if metadata.get("tagger") and metadata["tagger"] != tagger_mode():
+            raise ValueError(
+                f"saved model requires {metadata['tagger']} POS tagging; "
+                f"runtime uses {tagger_mode()}; restore the tagger or retrain")
+        return cls(pipeline=bundle["pipeline"], feature_names=names,
+                   metadata=metadata)
 
 
 # --------------------------------------------------------------------------
 # Dataset plumbing
 # --------------------------------------------------------------------------
+
+def dataset_sha256(path: str = DATA_PATH) -> str:
+    """Fingerprint the exact CSV used to train or evaluate a saved model."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_dataset_rows(path: str = DATA_PATH) -> list[dict]:
+    """Read the CSV contract and reject ambiguous IDs or labels."""
+    with open(path, encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise ValueError("training dataset is empty")
+    ids = [row["id"] for row in rows]
+    if len(set(ids)) != len(ids):
+        raise ValueError("training dataset contains duplicate row IDs")
+    if any(row["label"] not in (AI_LABEL, HUMAN_LABEL) for row in rows):
+        raise ValueError("training dataset labels must be 'ai' or 'human'")
+    return rows
+
+
+def dataset_metadata(path: str = DATA_PATH,
+                     require_manifest: bool = True) -> dict:
+    """Read M0's group assignments and verify they belong to this exact CSV."""
+    rows = load_dataset_rows(path)
+    result = {"dataset_sha256": dataset_sha256(path),
+              "row_ids": [row["id"] for row in rows], "groups": None,
+              "dataset_sources": {}}
+    manifest_path = os.path.join(os.path.dirname(path), "train_manifest.json")
+    if not os.path.exists(manifest_path):
+        if require_manifest:
+            raise ValueError("dataset manifest missing; regenerate with m0_dataset.py")
+        return result
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if manifest.get("csv_sha256") != result["dataset_sha256"]:
+        raise ValueError("dataset differs from its manifest; regenerate with m0_dataset.py")
+    row_groups = manifest.get("row_groups", {})
+    if set(row_groups) != set(result["row_ids"]):
+        raise ValueError("dataset manifest group IDs do not match CSV rows")
+    if any(not isinstance(group, str) or not group for group in row_groups.values()):
+        raise ValueError("dataset manifest contains invalid group assignments")
+    result.update(groups=[row_groups[row_id] for row_id in result["row_ids"]],
+                  dataset_sources=manifest.get("sources", {}),
+                  manifest_sha256=dataset_sha256(manifest_path))
+    return result
+
 
 def load_dataset(path: str = DATA_PATH) -> tuple[list[dict], list[str]]:
     """Extract features for every row. Returns (feature_dicts, labels).
@@ -359,12 +441,11 @@ def load_dataset(path: str = DATA_PATH) -> tuple[list[dict], list[str]]:
     """
     features: list[dict] = []
     labels: list[str] = []
-    with open(path, encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
-            tokens = tokenize(row["text"])
-            features.append(extract_features_from(
-                tokens, build_symtab(tokens), parse_tokens(tokens)))
-            labels.append(row["label"])
+    for row in load_dataset_rows(path):
+        tokens = tokenize(row["text"])
+        features.append(extract_features_from(
+            tokens, build_symtab(tokens), parse_tokens(tokens)))
+        labels.append(row["label"])
     return features, labels
 
 
@@ -493,17 +574,53 @@ def _mean_squared(scores: list[float], truth: list[int]) -> float:
 
 
 def split_indices(labels: list[str], test_size: float = 0.25,
-                  random_state: int = 42) -> tuple[list[int], list[int]]:
+                  random_state: int = 42,
+                  groups=None) -> tuple[list[int], list[int]]:
     """Stratified train/test index split, shared by both scorers.
 
     Using one split for M5a and M5b keeps their accuracies comparable.
     """
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 
+    if any(label not in (AI_LABEL, HUMAN_LABEL) for label in labels):
+        raise ValueError("labels must be 'ai' or 'human'")
     stratify = [1 if label == AI_LABEL else 0 for label in labels]
+    if groups is not None:
+        if len(groups) != len(labels):
+            raise ValueError("groups must have one assignment per row")
+        if not 0 < test_size < 1:
+            raise ValueError("test_size must be between 0 and 1")
+        n_splits = round(1 / test_size)
+        if n_splits < 2 or not math.isclose(1 / n_splits, test_size):
+            raise ValueError("grouped test_size must be reciprocal of an integer")
+        if len(set(groups)) < n_splits:
+            raise ValueError("too few independent groups for the held-out split")
+        cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True,
+                                  random_state=random_state)
+        train, test = next(cv.split(list(range(len(labels))), stratify, groups))
+        if any(len({labels[i] for i in part}) != 2 for part in (train, test)):
+            raise ValueError("both classes must occur in train and held-out groups")
+        return train.tolist(), test.tolist()
     return train_test_split(
         list(range(len(labels))), test_size=test_size,
         random_state=random_state, stratify=stratify)
+
+
+def _cv_indices(X, y, groups=None, random_state: int = 42) -> list:
+    """Training-only CV folds; related documents stay in one group."""
+    from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
+
+    if groups is None:
+        return list(StratifiedKFold(n_splits=5).split(X, y))
+    if len(set(groups)) < 5:
+        raise ValueError("training CV requires at least five independent groups")
+    splitter = StratifiedGroupKFold(n_splits=5, shuffle=True,
+                                    random_state=random_state)
+    folds = list(splitter.split(X, y, groups))
+    for train, validation in folds:
+        if len(set(y[train])) != 2 or len(set(y[validation])) != 2:
+            raise ValueError("both classes must occur in every grouped CV fold")
+    return folds
 
 
 # --------------------------------------------------------------------------
