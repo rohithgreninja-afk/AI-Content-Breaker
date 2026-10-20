@@ -182,11 +182,11 @@ class RuleScorer:
 # --------------------------------------------------------------------------
 
 class ModelScorer:
-    """M5b: logistic regression over the M4 feature vector.
+    """M5b: a saved probabilistic classifier over the M4 feature vector.
 
-    Features are standardised before fitting, since the vector mixes rates in
-    0-1 with log counts and raw depths. Wraps a scikit-learn pipeline; `fit`
-    reports held-out accuracy and `save`/`load` persist it.
+    The original fit/select_C helpers use standardised logistic regression.
+    Train-only model selection can persist other scikit-learn pipelines with
+    the same feature order and predict_proba interface.
     """
 
     def __init__(self, pipeline=None, feature_names=FEATURE_NAMES,
@@ -339,7 +339,12 @@ class ModelScorer:
         The pipeline standardises first, so these are directly comparable.
         """
         pipeline = self._require_fitted()
-        coefficients = pipeline.named_steps["logreg"].coef_[0]
+        classifier = pipeline.named_steps.get("logreg")
+        if classifier is None or not hasattr(classifier, "coef_"):
+            raise ValueError("this classifier has no signed linear feature coefficients")
+        coefficients = classifier.coef_[0]
+        if len(coefficients) != len(self.feature_names):
+            raise ValueError("transformed linear coefficients do not map directly to M4 features")
         ranked = sorted(zip(self.feature_names, coefficients),
                         key=lambda pair: -abs(pair[1]))
         return [(name, float(weight)) for name, weight in ranked[:n]]
@@ -379,8 +384,39 @@ class ModelScorer:
         source_hash = metadata.get("feature_extractor_sha256")
         if source_hash and source_hash != feature_extractor_sha256():
             raise ValueError("feature extractor changed since training; retrain with --train")
+        if "estimator_config" in metadata:
+            _validate_estimator_config(bundle["pipeline"], metadata["estimator_config"])
         return cls(pipeline=bundle["pipeline"], feature_names=names,
                    metadata=metadata)
+
+
+def _estimator_parameters(value):
+    """Canonical constructor parameters, excluding learned state and repr addresses."""
+    if hasattr(value, "get_params"):
+        return {"class": f"{type(value).__module__}.{type(value).__qualname__}",
+                "parameters": {name: _estimator_parameters(parameter)
+                               for name, parameter in sorted(value.get_params(deep=False).items())}}
+    if isinstance(value, dict):
+        return {name: _estimator_parameters(parameter)
+                for name, parameter in sorted(value.items())}
+    if isinstance(value, (list, tuple)):
+        return [_estimator_parameters(parameter) for parameter in value]
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if hasattr(value, "item"):
+        return _estimator_parameters(value.item())
+    raise ValueError(f"unsupported estimator parameter type: {type(value).__name__}")
+
+
+def _validate_estimator_config(pipeline, config: dict) -> None:
+    """Reject an artifact whose estimator differs from its recorded recipe."""
+    from m5_estimators import build_estimator
+
+    if not isinstance(config, dict):
+        raise ValueError("saved estimator configuration must be a dictionary")
+    expected = build_estimator(config)
+    if _estimator_parameters(pipeline) != _estimator_parameters(expected):
+        raise ValueError("saved estimator does not match its recorded configuration; retrain")
 
 
 # --------------------------------------------------------------------------
