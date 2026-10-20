@@ -1,5 +1,71 @@
 # PROGRESS
 
+## 2026-10-20: Improve accuracy using training-only model selection (complete)
+
+This section supersedes the classifier choice and metrics in the previous
+training entry. The corpus, feature extractor, split, gate, and cutoff are
+unchanged.
+
+- Committed `reports/model_selection_protocol.json` before trials: eight
+  explicit candidates, five fixed StratifiedGroupKFold folds (seed 42),
+  pooled gated validation accuracy as the primary metric, all-row accuracy
+  as tie-breaker/guard, minimum improvement 1 percentage point. The gate
+  remains 50 alphabetic whitespace pieces and the probability cutoff 0.5.
+  Boosting candidates explicitly disable internal early-stopping validation.
+- `m5_training.py --select` builds a separate, hashed feature cache containing
+  **only the original 5,580 training IDs**, never the 1,910 heldout texts.
+  All learned preprocessing is fitted inside each fold. Related documents
+  stay together; all candidates see identical folds. There is no rule-score
+  blending, threshold tuning, or test-result-driven candidate selection.
+- ExtraTrees won the frozen rule: **0.7382 all-row / 0.7797 gated pooled OOF
+  accuracy**, versus logistic C=10 **0.6720 / 0.7061**. These are selection-CV
+  results, not unbiased nested-CV estimates. Candidate details and each
+  training ID's fold are saved in `reports/model_selection.json`.
+- Committed the winner in `52d0d17` before fitting or evaluating it on test
+  data. Finalization checks committed protocol/selection content, cache
+  identity and digest, unchanged split IDs, complete fold coverage, and
+  related-group consistency before any heldout feature extraction. It fits
+  only the frozen recipe and never switches models based on the final test.
+- The saved classifier is **ExtraTrees, 300 trees, minimum leaf size 5,
+  max_features=0.7, random_state=42**. It completes the fixed tree budget.
+  Same 89 features and saved split: 5,580 training / 1,910 test texts;
+  1,354 pass the word gate, 556 abstain (**70.9% coverage**).
+- **Fixed internal holdout:** all-row accuracy **0.7335**, ROC-AUC **0.8213**;
+  gated accuracy **0.7873**, ROC-AUC **0.8672**, precision **0.8174**, recall
+  **0.7430**, F1 **0.7785**. Gated confusion `[[560,113],[175,506]]`.
+  The previously shipped model scored **0.6864 / 0.7341** all-row/gated;
+  the gain is **4.7 / 5.3 percentage points** with unchanged subsets.
+- Gated accuracy by source: MAGE **0.7544** (688 rows), HC3 **0.8506**
+  (462), Wiki **0.7815** (151), RAID **0.6792** (53). This is the already
+  published internal holdout, not a new unseen external benchmark. Training
+  accuracy is 0.9975, far above validation/test; do not treat it as a
+  generalization estimate. No further search followed the final test results.
+- Preserved the exact previous published evaluation separately from the
+  C=10 reference refit. The two-thread refit's numerical optimizer path
+  scores 0.7326 gated, slightly different from the original artifact's
+  0.7341. Verified prior/current dataset, manifest, feature hashes, train/test
+  IDs and order are identical; the original model hash is retained.
+- `ModelScorer` still loads the original logistic artifact and accepts new
+  sklearn recipes, validating saved constructor parameters against the
+  recorded recipe. Nonlinear models refuse to present signed linear
+  coefficients. Batch evaluation and bounded prediction threads prevent
+  needless parallel overhead; threadpoolctl is pinned to the used version.
+- `verify_training.py` now checks complete fitted tree state or legacy
+  linear parameters as appropriate. A fresh fit reproduces every tree node
+  and value exactly (**maximum difference 0.0**); probability differences
+  are only **2.22e-16**. Recorded holdout metrics match actual saved-model
+  predictions; features are finite and there are no duplicate or leaked
+  groups. Evidence: `reports/training_validation.json`.
+- **All 181 tests pass**, including 23 selection/finalization leakage tests
+  and six added model/verification tests. Sentinel texts prove excluded
+  heldout rows never reach selection extraction. Failed commit/cache/fold
+  checks stop before heldout access. `pip check` is clean and the demo runs.
+- README now documents the selection/commit/finalization workflow, current
+  classifier and results, compatibility artifact filename, and evaluation
+  limitations. The approximately 34 MB artifact is included; the corpus and
+  feature cache remain ignored. No new datasets or feature changes were
+  needed for this improvement.
+
 ## 2026-10-20: MAGE audit and additional dataset training (complete)
 
 This section supersedes the historical RAID and MAGE scoreboards below.
