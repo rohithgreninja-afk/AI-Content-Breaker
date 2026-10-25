@@ -62,8 +62,47 @@ export type Analysis = {
     fired: Rule[];
     missed: Rule[];
   };
+  robustness: RobustnessReport;
   stages: { id: string; name: string; output: string }[];
   console_output: string;
+};
+
+export type RobustnessRun = {
+  id: string;
+  name: string;
+  target: string;
+  applied: boolean;
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+  rule_score: number | null;
+  model_score: number | null;
+  rule_delta: number | null;
+  model_delta: number | null;
+  rule_flipped: boolean | null;
+  model_flipped: boolean | null;
+};
+
+export type RobustnessReport = {
+  abstain: boolean;
+  n_words: number;
+  min_words: number;
+  purpose: string;
+  baseline: {
+    rule_score: number;
+    model_score: number | null;
+    rule_verdict: string | null;
+    model_verdict: string | null;
+  };
+  runs: RobustnessRun[];
+  fragility: {
+    M5a: number | null;
+    M5b: number | null;
+    M5a_flips: number;
+    M5a_applied: number;
+    M5b_flips: number;
+    M5b_applied: number;
+  };
 };
 
 export async function request<T>(

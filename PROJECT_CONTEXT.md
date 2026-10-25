@@ -99,16 +99,26 @@ metaphor. Build order follows the module numbers M0..M7.
 ## M6 robustness harness - framing is a hard boundary
 - Purpose: measure OUR OWN detector's fragility, per attribute. It is a
   robustness-evaluation tool, NOT an evasion tool. Keep that framing in code
-  comments, docstrings, and the README.
-- Five perturbations, each attacking one M4 attribute via the matching compiler
-  mechanism, plus a compound run (all five stacked) and a fragility score
-  (fraction of runs whose verdict flipped vs baseline):
-  P1 lexer-aware synonym sub      -> lexical_diversity
-  P2 symbol-table repetition break-> transition_phrase_density
-  P3 grammar-preserving paraphrase-> tree_depth_var
-  P4 POS-automaton state-break    -> ngram_repetition
-  P5 bigram-entropy injection     -> firstfollow_predictability
-- Report per-perturbation feature delta, confidence delta, and flipped Y/N.
+  comments, docstrings, and the README. Do not search for wording that flips
+  a label, and do not call another model.
+- Implemented in `src/m6_harness.py` and appended to `STAGES` as
+  `("M6 robustness", run_m6, show_m6)`. It is not part of `CORE_STAGES`.
+  Perturbations call `CORE_STAGES` only, so M6 cannot recurse. Ordinary
+  analysis runs M1–M6. Also: `python src/m6_harness.py path\to\text.txt`
+  and `POST /api/robustness`.
+- Five deterministic edits, each reported against one existing M4 feature,
+  plus a compound run that applies P1–P5 in order. Fragility is the fraction
+  of *applied* runs whose verdict differs from the baseline, reported
+  separately for M5a and M5b. An edit that cannot apply is excluded. Below
+  the 50-word gate the baseline abstains and no flip is claimed.
+  P1 synonym substitution of a repeated content word -> lex_type_token_ratio
+  P2 transition words replaced with plain wording    -> lex_transition_rate
+  P3 split a coordination, or join two short sentences -> parse_stdev_depth
+  P4 insert one neutral word into a sentence-initial template -> tpl_score
+  P5 swap one adjacent pair of content words         -> rep_word_entropy
+- These names replace the original six-feature labels. Do not add or reorder
+  `FEATURE_NAMES`; the saved classifier depends on that order.
+- Report per-edit feature delta, score delta, and flipped Y/N.
 
 ## Repo layout to create
 ```

@@ -18,6 +18,7 @@ import time
 from types import FunctionType
 from urllib.parse import urlsplit
 
+import m6_harness
 import pipeline
 from m3_parser import render_tree, tagger_mode
 from m5_scorer import DATA_PATH, MODEL_PATH, REPO_ROOT, ModelScorer
@@ -65,10 +66,15 @@ def analyze_text(text: str) -> dict:
         "parser": {**meta, "first_tree": tree},
         "features": {"all": context["features"],
                      "selected": {name: context["features"][name] for name in pipeline.SHOWN_FEATURES}},
-        "rules": context["rules"], "stages": stages,
+        "rules": context["rules"], "robustness": context["robustness"], "stages": stages,
         "console_output": f"input: web text ({len(text)} characters)\n" + "".join(
             f"\n== {stage['id']} {stage['name']} ==\n{stage['output']}" for stage in stages),
     }
+
+
+def robustness_report(text: str) -> dict:
+    """Score fixed edits of this passage. Does not change ordinary analysis."""
+    return m6_harness.evaluate(text)
 
 
 class ApplicationState:
@@ -283,8 +289,19 @@ class APIHandler(BaseHTTPRequestHandler):
         else:
             self._respond(404, {"error": "Endpoint not found."})
 
+    def _submitted_text(self, data: dict) -> str | None:
+        """Validate a text field. Responds with an error and returns None."""
+        text = data.get("text")
+        if not isinstance(text, str) or not text.strip():
+            self._respond(400, {"error": "Enter some text to analyze."})
+            return None
+        if len(text) > MAX_CHARACTERS:
+            self._respond(413, {"error": f"Use no more than {MAX_CHARACTERS:,} characters."})
+            return None
+        return text
+
     def do_POST(self) -> None:
-        """Start a training job or analyze the submitted text."""
+        """Start a training job, analyze text, or measure robustness."""
         if not self._local_request():
             return
         data = self._json_body()
@@ -293,21 +310,19 @@ class APIHandler(BaseHTTPRequestHandler):
         if self.path == "/api/model/train":
             status, response = self.server.state.start_training()
             self._respond(status, response)
-        elif self.path == "/api/analyze":
-            text = data.get("text")
-            if not isinstance(text, str) or not text.strip():
-                self._respond(400, {"error": "Enter some text to analyze."})
-            elif len(text) > MAX_CHARACTERS:
-                self._respond(413, {"error": f"Use no more than {MAX_CHARACTERS:,} characters."})
-            else:
-                try:
-                    with self.server.state.inference_lock:
-                        self.server.state.status()
-                        result = analyze_text(text)
-                    self._respond(200, result)
-                except Exception as error:
-                    self.log_error("Analysis failed: %s", error)
-                    self._respond(500, {"error": "Analysis could not finish. Check model status and try again."})
+        elif self.path in ("/api/analyze", "/api/robustness"):
+            text = self._submitted_text(data)
+            if text is None:
+                return
+            try:
+                with self.server.state.inference_lock:
+                    self.server.state.status()
+                    result = (analyze_text(text) if self.path == "/api/analyze"
+                              else robustness_report(text))
+                self._respond(200, result)
+            except Exception as error:
+                self.log_error("Analysis failed: %s", error)
+                self._respond(500, {"error": "Analysis could not finish. Check model status and try again."})
         else:
             self._respond(404, {"error": "Endpoint not found."})
 

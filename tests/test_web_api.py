@@ -30,7 +30,10 @@ class TestAnalysisContract(unittest.TestCase):
             pipeline.main(["--text", pipeline.SAMPLE])
         expected = output.getvalue().replace("input: --text (", "input: web text (", 1)
         self.assertEqual(result["console_output"], expected)
-        self.assertEqual([stage["id"] for stage in result["stages"]], ["M1", "M2", "M3", "M4", "M5"])
+        self.assertEqual([stage["id"] for stage in result["stages"]],
+                         ["M1", "M2", "M3", "M4", "M5", "M6"])
+        self.assertIn("robustness", result)
+        self.assertEqual(len(result["robustness"]["runs"]), 6)
         self.assertEqual(len(result["features"]["all"]), 89)
         self.assertIsInstance(result["parser"]["first_tree"], str)
         self.assertEqual(result["symbols"]["top_words"],
@@ -174,7 +177,21 @@ class TestHTTPContract(unittest.TestCase):
         for body in ({}, {"text": 42}, {"text": "   "}, ["text"]):
             with self.subTest(body=body):
                 self.assertEqual(self.request("POST", "/api/analyze", body)[0], 400)
+                self.assertEqual(self.request("POST", "/api/robustness", body)[0], 400)
         self.assertEqual(self.request("POST", "/api/analyze", {"text": "a" * 50_001})[0], 413)
+        self.assertEqual(self.request("POST", "/api/robustness", {"text": "a" * 50_001})[0], 413)
+
+    def test_robustness_abstains_without_adding_a_stage(self):
+        status, result = self.request("POST", "/api/robustness", {"text": "A short sentence."})
+        self.assertEqual(status, 200)
+        self.assertTrue(result["abstain"])
+        self.assertIsNone(result["fragility"]["M5a"])
+        self.assertIsNone(result["fragility"]["M5b"])
+        self.assertEqual(len(result["runs"]), 6)
+        analyzed = self.request("POST", "/api/analyze", {"text": pipeline.SAMPLE})[1]
+        self.assertEqual([stage["id"] for stage in analyzed["stages"]],
+                         ["M1", "M2", "M3", "M4", "M5", "M6"])
+        self.assertIn("fragility", analyzed["robustness"])
 
     def test_cross_site_and_dns_rebinding_requests_are_rejected(self):
         self.assertEqual(self.request("POST", "/api/model/train", {}, {"Origin": "https://evil.example"})[0], 403)

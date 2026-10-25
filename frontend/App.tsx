@@ -31,7 +31,13 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
-import { request, type Analysis, type ModelStatus, type Rule } from "./api";
+import {
+  request,
+  type Analysis,
+  type ModelStatus,
+  type RobustnessReport,
+  type Rule,
+} from "./api";
 
 const stages = [
   { id: "M1", name: "Lexer", description: "Text → tokens", icon: ScanText },
@@ -58,6 +64,12 @@ const stages = [
     name: "Scoring",
     description: "Signals → verdict",
     icon: Microscope,
+  },
+  {
+    id: "M6",
+    name: "Robustness",
+    description: "Edits → fragility",
+    icon: ShieldCheck,
   },
 ];
 const format = (value: number, places = 3) =>
@@ -139,6 +151,87 @@ function Score({
   );
 }
 
+function flipLabel(value: boolean | null) {
+  if (value === null) return "—";
+  return value ? "Yes" : "No";
+}
+
+function fragilityLabel(
+  rate: number | null,
+  flips: number,
+  applied: number,
+) {
+  if (rate === null) return "—";
+  return `${percent(rate)} (${flips}/${applied})`;
+}
+
+function RobustnessTable({ report }: { report: RobustnessReport }) {
+  return (
+    <div className="robustness-block">
+      <h3>Robustness</h3>
+      <p>{report.purpose}</p>
+      {report.abstain && (
+        <p className="abstain-note">
+          This passage has {report.n_words} words. Both scorers abstain below{" "}
+          {report.min_words} words, so no flip is claimed.
+        </p>
+      )}
+      <dl className="metric-grid report-metrics">
+        <Metric
+          label="M5a fragility"
+          value={fragilityLabel(
+            report.fragility.M5a,
+            report.fragility.M5a_flips,
+            report.fragility.M5a_applied,
+          )}
+        />
+        <Metric
+          label="M5b fragility"
+          value={fragilityLabel(
+            report.fragility.M5b,
+            report.fragility.M5b_flips,
+            report.fragility.M5b_applied,
+          )}
+        />
+      </dl>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Edit</th>
+              <th>Feature</th>
+              <th>Before</th>
+              <th>After</th>
+              <th>Delta</th>
+              <th>M5a flip</th>
+              <th>M5b flip</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.runs.map((run) => (
+              <tr key={run.id}>
+                <td>
+                  {run.id} {run.name}
+                </td>
+                <td>{run.applied ? run.target || "—" : "Not applied"}</td>
+                <td>{run.before === null ? "—" : format(run.before, 4)}</td>
+                <td>{run.after === null ? "—" : format(run.after, 4)}</td>
+                <td>
+                  {run.delta === null
+                    ? "—"
+                    : `${run.delta > 0 ? "+" : ""}${format(run.delta, 4)}`}
+                </td>
+                <td>{flipLabel(run.rule_flipped)}</td>
+                <td>{flipLabel(run.model_flipped)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function RuleTable({ rules }: { rules: Rule[] }) {
   return (
     <div className="table-scroll">
@@ -191,6 +284,9 @@ function PipelineReport({ result }: { result: Analysis }) {
                   `${parser.n_sentences} sentence${parser.n_sentences === 1 ? "" : "s"}`,
                   `${Object.keys(features.all).length} signals`,
                   `${rules.fired.length} rule${rules.fired.length === 1 ? "" : "s"} fired`,
+                  result.robustness.abstain
+                    ? "no flip claimed"
+                    : `M5b ${fragilityLabel(result.robustness.fragility.M5b, result.robustness.fragility.M5b_flips, result.robustness.fragility.M5b_applied)}`,
                 ][index]
               }
             </span>
@@ -379,6 +475,7 @@ function PipelineReport({ result }: { result: Analysis }) {
                 )}
               </>
             )}
+            {index === 5 && <RobustnessTable report={result.robustness} />}
           </div>
         </details>
       ))}
@@ -653,7 +750,7 @@ export default function App() {
             <ShieldCheck size={15} />
             <span>Runs on your machine</span>
           </div>
-          <span className="sidebar-version">AI Content Breaker / M1–M5</span>
+          <span className="sidebar-version">AI Content Breaker / M1–M6</span>
         </div>
       </aside>
 
@@ -677,7 +774,7 @@ export default function App() {
             <span className="project-label">
               Compiler design
               <br />
-              <strong>M1–M5 pipeline</strong>
+              <strong>M1–M6 pipeline</strong>
             </span>
           </div>
           <div
@@ -968,7 +1065,7 @@ export default function App() {
               <span>
                 <BookOpen size={17} />
                 <strong>Pipeline guide</strong>
-                <span>M1–M5 stages</span>
+                <span>M1–M6 stages</span>
               </span>
               <span className="guide-toggle">
                 View stages
@@ -991,6 +1088,7 @@ export default function App() {
                         "A recursive-descent grammar builds sentence trees. POS automata detect structural templates.",
                         "The feature extractor turns lexical and syntactic attributes into 89 measurable signals.",
                         "Nine inspectable rules and a trained classifier independently score the same passage.",
+                        "Five fixed edits and one combined copy are rescored. Fragility is how often our own verdict moves.",
                       ][i]
                     }
                   </p>

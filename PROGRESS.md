@@ -1,5 +1,26 @@
 # PROGRESS
 
+## 2026-10-25: M6 robustness harness
+
+- Added `src/m6_harness.py` and the pipeline row
+  `("M6 robustness", run_m6, show_m6)`. `CORE_STAGES` stays M1–M5, and the
+  harness rescores through that list so an edit cannot recurse into M6.
+  Ordinary analysis now runs M1–M6.
+- The edits map onto features that already exist: synonym substitution
+  (`lex_type_token_ratio`), transition replacement (`lex_transition_rate`),
+  coordination rewrite (`parse_stdev_depth`), template interruption
+  (`tpl_score`), and an adjacent content-word swap (`rep_word_entropy`).
+  Unapplied edits are left out of the fragility fraction. Under 50 words the
+  baseline abstains and no flip is claimed. M5a and M5b are reported separately.
+- This is a robustness check of our own detector, not an evasion tool. The
+  edits are a fixed table. Nothing searches for a wording that flips a label.
+- `POST /api/robustness` returns the same report. The workbench renders it
+  as the M6 stage of the analysis, in the rail and the pipeline guide.
+- Run: `.venv\Scripts\python.exe src\m6_harness.py path\to\text.txt`
+- Tests: `tests/test_m6_harness.py` and the robustness cases in
+  `tests/test_web_api.py`. Analyze on a long passage prints M1–M6, and the
+  M6 stage is the six-row fragility report.
+
 ## 2026-10-20: React analysis workbench
 
 - Added a React/TypeScript frontend in `frontend/` with a focused source editor,
@@ -453,15 +474,12 @@ For outage recovery use `src/m0_dataset.py --parquet`; train with
   0.75. Copying `taggers/` into `.venv\nltk_data` fixed it. Check
   `meta["tagger"] == "nltk"` before trusting any accuracy figure.
 
-## Test suite (all green)
-| module | tests |
-|---|---|
-| M1 lexer | 6 |
-| M2 symbol table | 5 |
-| M3 parser | 33 |
-| M4 features | 18 |
-| M5 scorer | 30 |
-| **total** | **92** |
+## Test suite
+
+The early M1–M5 smoke files were 92 tests (M1 6, M2 5, M3 33, M4 18, M5 30).
+That table went stale once the pipeline, dataset, training, and workbench
+suites landed: the 2026-10-20 entry records **197** tests. M6 adds
+`tests/test_m6_harness.py` and the robustness cases in `tests/test_web_api.py`.
 
 ## Caveats worth carrying forward
 - The 760-row sample is small and only 6 AI models wide; it is `attack == none`

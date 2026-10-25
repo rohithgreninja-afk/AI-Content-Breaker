@@ -65,6 +65,8 @@ Vite forwards `/api` to the loopback-only Python server:
   job; an already usable model is retained.
 - `POST /api/analyze` with `{"text":"..."}`: structured stages, scores,
   and the original console transcript.
+- `POST /api/robustness` with `{"text":"..."}`: the M6 fragility report alone.
+  `POST /api/analyze` includes the same report as its last stage.
 - `GET /api/sample`: the built-in demonstration passage.
 
 POST requests use `Content-Type: application/json`. The backend validates
@@ -121,7 +123,18 @@ dependencies and NLTK tagger above, edit `demo_input.txt` and run:
 ```powershell
 .venv\Scripts\python.exe demo.py --text
 .venv\Scripts\python.exe src\pipeline.py path\to\your_text.txt
+.venv\Scripts\python.exe src\m6_harness.py path\to\your_text.txt
 ```
+
+`m6_harness.py` measures how this detector's own verdict moves. It applies
+five fixed edits (synonym, transition wording, coordination, template
+interruption, adjacent swap) plus one compound copy, then reports feature
+deltas and whether M5a or M5b flipped. Edits that cannot apply are left out
+of the fragility fraction. It is a robustness check, not an evasion tool.
+The workbench shows the same report as the M6 stage after **Analyze text**.
+Passages under 50 words abstain, and no flip is claimed. Rescoring uses
+M1–M5 only, so the harness does not edit a passage and then measure that
+edit again.
 
 Use at least 50 words; the pipeline abstains on shorter inputs. A test run on
 the saved model's actual held-out data requires regenerating the sampled data

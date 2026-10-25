@@ -66,7 +66,7 @@ class TestRunPipeline(unittest.TestCase):
         with redirect_stdout(buffer):
             pipeline.main(["--text", SAMPLE])
         out = buffer.getvalue()
-        for name, _, _ in pipeline.CORE_STAGES:
+        for name, _, _ in pipeline.STAGES:
             self.assertIn(f"== {name} ==", out)
 
 
@@ -139,8 +139,13 @@ class TestExtensionPoint(unittest.TestCase):
         ctx = pipeline.run_pipeline(SAMPLE, stages=stages, show=False)
         self.assertEqual(ctx["extra"], ctx["rules"]["score"])
 
-    def test_default_stages_start_as_core(self):
-        self.assertEqual(tuple(pipeline.STAGES), pipeline.CORE_STAGES)
+    def test_m6_is_the_last_stage_and_core_stays_the_scorer(self):
+        self.assertEqual(tuple(pipeline.STAGES[:5]), pipeline.CORE_STAGES)
+        self.assertEqual(pipeline.STAGES[5][0], "M6 robustness")
+        self.assertEqual(
+            [name.split()[0] for name, _, _ in pipeline.CORE_STAGES],
+            ["M1", "M2", "M3", "M4", "M5"],
+        )
 
 
 class TestSavedHoldout(unittest.TestCase):

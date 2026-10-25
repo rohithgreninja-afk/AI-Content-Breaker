@@ -11,13 +11,9 @@
 Every stage is a (name, run, show) row. run(ctx) reads earlier results from the
 shared ctx dict and stores its own; show(ctx) prints them.
 
-Adding a stage later (M6, M7, ...):
-    1. write run_m6(ctx) and show_m6(ctx)
-    2. append ("M6 robustness", run_m6, show_m6) to STAGES
-Nothing else changes. CORE_STAGES (M1 to M5) is the scoring path and never
-includes M6, so a harness can call
-    run_pipeline(perturbed_text, stages=CORE_STAGES, show=False)
-to re-score perturbed text without recursing into itself.
+CORE_STAGES (M1 to M5) is the scoring path and never includes M6. M6 is the
+next row in STAGES: it rescores fixed edits through CORE_STAGES, so a
+perturbation cannot recurse into the harness.
 """
 
 from __future__ import annotations
@@ -192,6 +188,19 @@ def show_m5(ctx: dict) -> None:
               f"{ctx['verdicts']['M5b']}")
 
 
+def run_m6(ctx: dict) -> None:
+    """Measure verdict movement. Reuses the M1–M5 context already in ctx."""
+    from m6_harness import evaluate
+
+    ctx["robustness"] = evaluate(ctx["text"], baseline=ctx)
+
+
+def show_m6(ctx: dict) -> None:
+    from m6_harness import format_report
+
+    print(format_report(ctx["robustness"]), end="")
+
+
 CORE_STAGES = (
     ("M1 lexer", run_m1, show_m1),
     ("M2 symbol table", run_m2, show_m2),
@@ -199,8 +208,10 @@ CORE_STAGES = (
     ("M4 features", run_m4, show_m4),
     ("M5 scoring", run_m5, show_m5),
 )
-# Add M6 / M7 here, after M5, e.g. STAGES.append(("M6 robustness", run_m6, show_m6)).
-STAGES = list(CORE_STAGES)
+STAGES = [
+    *CORE_STAGES,
+    ("M6 robustness", run_m6, show_m6),
+]
 
 
 def run_pipeline(text: str, stages=None, show: bool = True) -> dict:
