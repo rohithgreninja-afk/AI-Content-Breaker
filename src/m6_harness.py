@@ -1,8 +1,7 @@
 """M6: robustness harness for this detector.
 
 The harness measures how far our own verdict moves when a passage is edited
-in five small, fixed ways. It is a robustness-evaluation tool, not an evasion
-tool: the edits are not searched, tuned, or chosen to flip a label.
+in five small, fixed ways. The edits are a fixed table.
 
     python src/m6_harness.py path\\to\\text.txt
 
@@ -124,8 +123,7 @@ NEUTRAL_WORD = "now"
 _START_DFA = build_dfa(START_TEMPLATES)
 
 PURPOSE = (
-    "Measures how this detector's own verdict moves after fixed edits. "
-    "This is a robustness check, not an evasion tool."
+    "Measures how this detector's own verdict moves after fixed edits."
 )
 
 

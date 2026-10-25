@@ -23,6 +23,7 @@ import {
   Layers3,
   LoaderCircle,
   Microscope,
+  PenLine,
   Play,
   RefreshCw,
   ScanText,
@@ -35,6 +36,7 @@ import {
 import {
   request,
   type Analysis,
+  type HumanizeReport,
   type ModelStatus,
   type RobustnessReport,
   type RobustnessRun,
@@ -602,6 +604,158 @@ function PipelineReport({ result }: { result: Analysis }) {
   );
 }
 
+function humanizeStatus(report: HumanizeReport) {
+  if (report.reason === "abstain") return "Abstain";
+  if (report.reason === "already_human") return "Already human";
+  if (report.passed) return "Passed";
+  return "Not passed";
+}
+
+function humanizeNote(report: HumanizeReport) {
+  if (report.reason === "abstain") {
+    return `This passage has ${report.before.n_words} words. Both scorers abstain below ${report.min_words} words, so the passage was left unchanged.`;
+  }
+  if (report.reason === "already_human") {
+    return "Both verdicts already read human. The passage was left unchanged.";
+  }
+  if (report.reason === "passed") {
+    return "Both verdicts read human after the translation passes. A human verdict is this detector’s output.";
+  }
+  if (report.reason === "budget") {
+    return `Stopped after ${report.max_passes} passes. One or both verdicts still read AI.`;
+  }
+  const verb = report.unsupported.includes("pos_verb_rate")
+    ? " pos_verb_rate is still fired, and that rule has no meaning-preserving rewrite."
+    : "";
+  return `No remaining fired rule has a rewrite.${verb}`;
+}
+
+function HumanizeBlock({
+  report,
+  stale,
+  copied,
+  onCopy,
+  onUse,
+}: {
+  report: HumanizeReport;
+  stale: boolean;
+  copied: boolean;
+  onCopy: () => void;
+  onUse: () => void;
+}) {
+  const status = humanizeStatus(report);
+  return (
+    <div className="humanize-block" id="stage-M8">
+      <div className="overview-heading">
+        <div>
+          <p className="report-kicker">M8 · Translation</p>
+          <h3>
+            <span>
+              M5a rule verdict:{" "}
+              {verdictWord(report.after.rule_verdict, report.after.abstain)}
+            </span>
+            <span>
+              M5b model verdict:{" "}
+              {verdictWord(report.after.model_verdict, report.after.abstain)}
+            </span>
+          </h3>
+        </div>
+        <span
+          className={`report-badge${report.passed ? " complete" : ""}`}
+        >
+          {status}
+        </span>
+      </div>
+      {stale && (
+        <p className="stale-notice">
+          <TriangleAlert size={15} />
+          This rewrite is for the previous text. Humanize again to update it.
+        </p>
+      )}
+      <p className="stage-note">{report.purpose}</p>
+      <p className="stage-note">{humanizeNote(report)}</p>
+      <dl className="metric-grid report-metrics">
+        <Metric
+          label="M5a before"
+          value={verdictWord(report.before.rule_verdict, report.before.abstain)}
+        />
+        <Metric
+          label="M5b before"
+          value={verdictWord(
+            report.before.model_verdict,
+            report.before.abstain,
+          )}
+        />
+        <Metric
+          label="M5a after"
+          value={`${verdictWord(report.after.rule_verdict, report.after.abstain)} ${format(report.after.rule_score)}`}
+        />
+        <Metric
+          label="M5b after"
+          value={
+            report.after.model_score === null
+              ? verdictWord(report.after.model_verdict, report.after.abstain)
+              : `${verdictWord(report.after.model_verdict, report.after.abstain)} ${format(report.after.model_score)}`
+          }
+        />
+      </dl>
+      {report.steps.length > 0 && (
+        <div className="robustness-scroll">
+          <table className="robustness-table">
+            <thead>
+              <tr>
+                <th scope="col">Attribute</th>
+                <th scope="col">Rewrite</th>
+                <th scope="col">Feature</th>
+                <th scope="col">M5a</th>
+                <th scope="col">M5b</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.steps.map((step, index) => (
+                <tr key={`${step.attribute}-${index}`}>
+                  <td className="text">{step.attribute}</td>
+                  <td className="text">{step.name}</td>
+                  <td className="num">
+                    {format(step.feature_before, 4)} → {format(step.feature_after, 4)}
+                  </td>
+                  <td className="text">
+                    {verdictWord(step.rule_verdict, false)} {format(step.rule_score)}
+                  </td>
+                  <td className="text">
+                    {step.model_score === null
+                      ? "Unavailable"
+                      : `${verdictWord(step.model_verdict, false)} ${format(step.model_score)}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <label className="small-label" htmlFor="rewritten-passage">
+        Rewritten passage
+      </label>
+      <textarea
+        id="rewritten-passage"
+        readOnly
+        value={report.text}
+        rows={8}
+      />
+      <div className="humanize-actions">
+        <button type="button" className="text-button" onClick={onCopy}>
+          <Copy size={14} />
+          {copied ? "Copied" : "Copy text"}
+        </button>
+        <button type="button" className="text-button" onClick={onUse}>
+          <PenLine size={14} />
+          Use in editor
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [text, setText] = useState("");
   const [result, setResult] = useState<Analysis | null>(null);
@@ -611,6 +765,10 @@ export default function App() {
   const [modelFeedback, setModelFeedback] = useState("");
   const [checking, setChecking] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [humanizing, setHumanizing] = useState(false);
+  const [humanize, setHumanize] = useState<HumanizeReport | null>(null);
+  const [humanizedText, setHumanizedText] = useState("");
+  const [copiedRewrite, setCopiedRewrite] = useState(false);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [error, setError] = useState("");
   const [view, setView] = useState<"pipeline" | "console">("pipeline");
@@ -620,6 +778,7 @@ export default function App() {
   const mounted = useRef(true);
   const modelBusy = useRef(false);
   const copyTimer = useRef<number | undefined>(undefined);
+  const rewriteTimer = useRef<number | undefined>(undefined);
   const guide = useRef<HTMLDetailsElement>(null);
   const wordCount = text
     .split(/\s+/u)
@@ -628,6 +787,8 @@ export default function App() {
   const maxCharacters = model?.max_characters || 50000;
   const training = model?.training.running || false;
   const stale = !!result && text !== analyzedText;
+  const rewriteStale = !!humanize && text !== humanizedText;
+  const busy = analyzing || humanizing;
 
   useEffect(() => {
     mounted.current = true;
@@ -641,6 +802,7 @@ export default function App() {
     return () => {
       mounted.current = false;
       window.clearTimeout(copyTimer.current);
+      window.clearTimeout(rewriteTimer.current);
     };
   }, []);
 
@@ -700,7 +862,7 @@ export default function App() {
 
   async function analyze(event: FormEvent) {
     event.preventDefault();
-    if (analyzing) return;
+    if (busy) return;
     if (!text.trim()) {
       setError("Enter a passage to analyze, or load the sample text.");
       input.current?.focus();
@@ -717,6 +879,7 @@ export default function App() {
     setAnalyzing(true);
     setError("");
     setCopied(false);
+    setCopiedRewrite(false);
     try {
       const analysis = await request<Analysis>(
         "/api/analyze",
@@ -734,6 +897,68 @@ export default function App() {
     } finally {
       if (mounted.current) setAnalyzing(false);
     }
+  }
+
+  async function humanizeText() {
+    if (busy) return;
+    if (!text.trim()) {
+      setError("Enter a passage to humanize, or load the sample text.");
+      input.current?.focus();
+      return;
+    }
+    if (text.length > maxCharacters) {
+      setError(
+        `Keep the passage under ${maxCharacters.toLocaleString("en-IN")} characters.`,
+      );
+      input.current?.focus();
+      return;
+    }
+    const submitted = text;
+    setHumanizing(true);
+    setError("");
+    setCopiedRewrite(false);
+    try {
+      const report = await request<HumanizeReport>(
+        "/api/humanize",
+        { method: "POST", body: JSON.stringify({ text: submitted }) },
+        120000,
+      );
+      if (!mounted.current) return;
+      setHumanize(report);
+      setHumanizedText(submitted);
+      window.requestAnimationFrame(() =>
+        document.getElementById("stage-M8")?.scrollIntoView({ block: "nearest" }),
+      );
+    } catch (error) {
+      if (mounted.current) setError(message(error));
+    } finally {
+      if (mounted.current) setHumanizing(false);
+    }
+  }
+
+  async function copyRewrite() {
+    if (!humanize) return;
+    try {
+      await navigator.clipboard.writeText(humanize.text);
+      setCopiedRewrite(true);
+      window.clearTimeout(rewriteTimer.current);
+      rewriteTimer.current = window.setTimeout(
+        () => setCopiedRewrite(false),
+        2500,
+      );
+    } catch {
+      setError(
+        "Clipboard access is unavailable. Select and copy the rewritten passage.",
+      );
+    }
+  }
+
+  function useRewrite() {
+    if (!humanize) return;
+    setText(humanize.text);
+    setHumanizedText(humanize.text);
+    setError("");
+    input.current?.focus();
   }
 
   async function loadSample() {
@@ -943,7 +1168,7 @@ export default function App() {
                     type="button"
                     className="text-button"
                     onClick={loadSample}
-                    disabled={sampleLoading || analyzing}
+                    disabled={sampleLoading || busy}
                   >
                     {sampleLoading ? (
                       <LoaderCircle size={13} className="spin" />
@@ -967,7 +1192,7 @@ export default function App() {
                     spellCheck={false}
                     aria-describedby={`input-help${error ? " input-error" : ""}`}
                     aria-invalid={!!error}
-                    disabled={analyzing || sampleLoading}
+                    disabled={busy || sampleLoading}
                     maxLength={maxCharacters}
                   />
                   <span className="editor-corner" aria-hidden="true">
@@ -983,7 +1208,7 @@ export default function App() {
                   <button
                     type="button"
                     className="clear-button"
-                    disabled={!text || analyzing || sampleLoading}
+                    disabled={!text || busy || sampleLoading}
                     onClick={() => {
                       setText("");
                       setError("");
@@ -1021,7 +1246,7 @@ export default function App() {
                 <button
                   type="submit"
                   className="button button-primary analyze-button"
-                  disabled={analyzing || sampleLoading}
+                  disabled={busy || sampleLoading}
                 >
                   <span>
                     {analyzing ? (
@@ -1033,6 +1258,22 @@ export default function App() {
                   </span>
                   <ArrowRight size={17} />
                 </button>
+                <button
+                  type="button"
+                  className="button button-outline measure-button"
+                  disabled={busy || sampleLoading}
+                  onClick={humanizeText}
+                >
+                  <span>
+                    {humanizing ? (
+                      <LoaderCircle size={17} className="spin" />
+                    ) : (
+                      <PenLine size={16} />
+                    )}
+                    {humanizing ? "Humanizing text…" : "Humanize text"}
+                  </span>
+                  <ArrowRight size={17} />
+                </button>
               </form>
               <div className="source-footnote">
                 <ShieldCheck size={14} />
@@ -1041,9 +1282,9 @@ export default function App() {
             </section>
 
             <section
-              className={`results-panel ${result ? "has-result" : ""}`}
+              className={`results-panel ${result || humanize ? "has-result" : ""}`}
               aria-labelledby="results-heading"
-              aria-busy={analyzing}
+              aria-busy={busy}
             >
               <div className="panel-heading">
                 <div>
@@ -1052,17 +1293,31 @@ export default function App() {
                     Analysis report
                   </h2>
                 </div>
-                <span className={`report-badge ${result ? "complete" : ""}`}>
+                <span className={`report-badge ${result || humanize?.passed ? "complete" : ""}`}>
                   {analyzing
                     ? "Processing"
-                    : result
-                      ? stale
-                        ? "Text edited"
-                        : "Complete"
-                      : "Awaiting text"}
+                    : humanizing
+                      ? "Humanizing"
+                      : result
+                        ? stale
+                          ? "Text edited"
+                          : "Complete"
+                        : humanize
+                          ? humanizeStatus(humanize)
+                          : "Awaiting text"}
                 </span>
               </div>
+              {humanize && (
+                <HumanizeBlock
+                  report={humanize}
+                  stale={rewriteStale}
+                  copied={copiedRewrite}
+                  onCopy={copyRewrite}
+                  onUse={useRewrite}
+                />
+              )}
               {!result ? (
+                humanize ? null : (
                 <div className="empty-report">
                   <div
                     className={`empty-mark ${analyzing ? "empty-mark-loading" : ""}`}
@@ -1071,13 +1326,22 @@ export default function App() {
                     <span />
                     <span />
                   </div>
-                  <h3>{analyzing ? "Analyzing text…" : "No analysis yet"}</h3>
+                  <h3>
+                    {analyzing
+                      ? "Analyzing text…"
+                      : humanizing
+                        ? "Humanizing text…"
+                        : "No analysis yet"}
+                  </h3>
                   <p>
                     {analyzing
                       ? "Running the lexer, parser, feature extractor, and scorers."
-                      : "Enter text and select Analyze text to view the results."}
+                      : humanizing
+                        ? "Applying the rewrite for each fired rule, then scoring again."
+                        : "Enter text and select Analyze text to view the results."}
                   </p>
                 </div>
+                )
               ) : (
                 <>
                   {stale && (

@@ -19,6 +19,7 @@ from types import FunctionType
 from urllib.parse import urlsplit
 
 import m6_harness
+import m8_humanize
 import pipeline
 from m3_parser import render_tree, tagger_mode
 from m5_scorer import DATA_PATH, MODEL_PATH, REPO_ROOT, ModelScorer
@@ -75,6 +76,11 @@ def analyze_text(text: str) -> dict:
 def robustness_report(text: str) -> dict:
     """Score fixed edits of this passage. Does not change ordinary analysis."""
     return m6_harness.evaluate(text)
+
+
+def humanize_text(text: str) -> dict:
+    """Rewrite from fired M5a rules. Does not change ordinary analysis."""
+    return m8_humanize.humanize(text)
 
 
 class ApplicationState:
@@ -301,7 +307,7 @@ class APIHandler(BaseHTTPRequestHandler):
         return text
 
     def do_POST(self) -> None:
-        """Start a training job, analyze text, or measure robustness."""
+        """Start a training job, analyze text, measure robustness, or humanize."""
         if not self._local_request():
             return
         data = self._json_body()
@@ -310,15 +316,19 @@ class APIHandler(BaseHTTPRequestHandler):
         if self.path == "/api/model/train":
             status, response = self.server.state.start_training()
             self._respond(status, response)
-        elif self.path in ("/api/analyze", "/api/robustness"):
+        elif self.path in ("/api/analyze", "/api/robustness", "/api/humanize"):
             text = self._submitted_text(data)
             if text is None:
                 return
             try:
                 with self.server.state.inference_lock:
                     self.server.state.status()
-                    result = (analyze_text(text) if self.path == "/api/analyze"
-                              else robustness_report(text))
+                    if self.path == "/api/analyze":
+                        result = analyze_text(text)
+                    elif self.path == "/api/robustness":
+                        result = robustness_report(text)
+                    else:
+                        result = humanize_text(text)
                 self._respond(200, result)
             except Exception as error:
                 self.log_error("Analysis failed: %s", error)

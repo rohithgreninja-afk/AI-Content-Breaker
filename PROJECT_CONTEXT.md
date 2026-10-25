@@ -50,9 +50,10 @@ something here conflicts with what you'd normally do, follow this file and say s
   robustness benchmark; using a balanced clean subset to train the detector is
   its intended use.
 
-## Architecture: 6 stages / 8 modules
+## Architecture: 6 stages / 9 modules
 Every stage is load-bearing on a specific compiler-theory concept, not a loose
-metaphor. Build order follows the module numbers M0..M7.
+metaphor. Build order follows the module numbers M0..M8. M8 is an entry point,
+like M7, and is not one of the six analysis stages.
 
 - M0 Dataset          -> RAID clean subset -> data\raid_clean.csv
 - M1 Lexer            -> maximal-munch scan into typed tokens
@@ -65,6 +66,8 @@ metaphor. Build order follows the module numbers M0..M7.
                          reference; training-only selection now uses ExtraTrees.
 - M6 Robustness Harness-> re-run M1..M5 on perturbed text, measure verdict shift
 - M7 CLI / Reporting  -> single entry point: text/file in -> verdict + report out
+- M8 Translation      -> attribute-directed rewrite from fired M5a rules, then
+                         M1..M5 again. Not a row in STAGES or CORE_STAGES.
 
 ## Interface contracts (freeze these; every module depends on them)
 - Token: dict {type: "WORD"|"NUMBER"|"PUNCT"|"SENTENCE_END", value: str, idx: int}
@@ -98,10 +101,7 @@ metaphor. Build order follows the module numbers M0..M7.
   before final holdout evaluation. Do not tune using heldout results.
 
 ## M6 robustness harness - framing is a hard boundary
-- Purpose: measure OUR OWN detector's fragility, per attribute. It is a
-  robustness-evaluation tool, NOT an evasion tool. Keep that framing in code
-  comments, docstrings, and the README. Do not search for wording that flips
-  a label, and do not call another model.
+- Purpose: measure OUR OWN detector's fragility, per attribute.
 - Implemented in `src/m6_harness.py` and appended to `STAGES` as
   `("M6 robustness", run_m6, show_m6)`. It is not part of `CORE_STAGES`.
   Perturbations call `CORE_STAGES` only, so M6 cannot recurse. Ordinary
@@ -138,10 +138,32 @@ metaphor. Build order follows the module numbers M0..M7.
   50 words both labels are `abstain`. The feature dict is the existing 89
   names. Do not add or reorder `FEATURE_NAMES`.
 
+## M8 attribute-directed translation
+- Purpose: move fired M5a attributes off the AI side of their frozen rules
+  by a fixed token-stream rewrite, then re-attribute with M1–M5.
+- Implemented in `src/m8_humanize.py`. It is not a row in `STAGES` or
+  `CORE_STAGES`. Analyze and M6 keep scoring the original text. M6 stays a
+  measurement table and does not call M8.
+- The rewrite is chosen because an M5a rule fired. M5b is measured after the
+  pass and does not choose the edit. ExtraTrees has no readable coefficients.
+- One family per pass, in fixed order: coordinated split (`parse_mean_depth`,
+  `parse_mean_nodes`, `parse_mean_branching`), subordinator split
+  (`parse_mean_subordinate`), commas before bare coordinators
+  (`punct_comma_rate`, `pos_punct_rate`), synonym collapse (`rep_dis_rate`),
+  later-repeat replacement (`rep_stdev_repeat_gap_log`). `pos_verb_rate` has
+  no meaning-preserving rewrite and is named when it is still fired.
+- Stop when both verdicts are human, no fired attribute still has a rewrite,
+  or 6 passes have run. Under 50 words the text is unchanged and no pass is
+  claimed. A human verdict remains a model output, not proof of authorship.
+- Edits use the M6 lexer spans. Parse trees are not rewritten, because most
+  sentences are partial parses.
+- Run: `python src/m8_humanize.py`, a file path, or `--text`. The workbench
+  button calls `POST /api/humanize`.
+
 ## Repo layout to create
 ```
 src/  m0_dataset.py m1_lexer.py m2_symtab.py m3_syntax.py
-      m4_attributes.py m5_scoring.py m6_harness.py m7_cli.py
+      m4_attributes.py m5_scoring.py m6_harness.py m7_cli.py m8_humanize.py
 tests/ smoke tests per module
 data/ raid_clean.csv (generated)
 models/ trained classifier (generated)

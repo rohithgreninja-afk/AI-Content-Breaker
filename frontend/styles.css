@@ -659,6 +659,28 @@ textarea[aria-invalid="true"] {
   align-items: center;
   gap: 9px;
 }
+.humanize-block {
+  padding: 18px 23px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.humanize-block .small-label {
+  display: block;
+  margin-top: 16px;
+}
+.humanize-block textarea {
+  margin-top: 8px;
+  min-height: 160px;
+  line-height: 1.7;
+}
+.humanize-block .robustness-scroll {
+  margin-top: 16px;
+}
+.humanize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 10px 0 14px;
+}
 .robustness-block {
   margin-top: 0;
 }

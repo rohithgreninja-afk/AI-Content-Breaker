@@ -84,6 +84,46 @@ export type RobustnessRun = {
   model_flipped: boolean | null;
 };
 
+export type HumanizeSide = {
+  n_words: number;
+  abstain: boolean;
+  rule_score: number;
+  model_score: number | null;
+  rule_verdict: string | null;
+  model_verdict: string | null;
+  fired: string[];
+};
+
+export type HumanizeStep = {
+  family: string;
+  name: string;
+  attribute: string;
+  feature_before: number;
+  feature_after: number;
+  feature_delta: number;
+  rule_score: number;
+  rule_delta: number;
+  model_score: number | null;
+  model_delta: number | null;
+  rule_verdict: string;
+  model_verdict: string | null;
+  text: string;
+};
+
+export type HumanizeReport = {
+  purpose: string;
+  text: string;
+  passed: boolean;
+  reason: string;
+  unsupported: string[];
+  min_words: number;
+  max_passes: number;
+  before: HumanizeSide;
+  after: HumanizeSide;
+  steps: HumanizeStep[];
+  model_note: string;
+};
+
 export type RobustnessReport = {
   abstain: boolean;
   n_words: number;

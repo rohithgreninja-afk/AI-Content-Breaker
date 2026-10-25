@@ -178,8 +178,21 @@ class TestHTTPContract(unittest.TestCase):
             with self.subTest(body=body):
                 self.assertEqual(self.request("POST", "/api/analyze", body)[0], 400)
                 self.assertEqual(self.request("POST", "/api/robustness", body)[0], 400)
+                self.assertEqual(self.request("POST", "/api/humanize", body)[0], 400)
         self.assertEqual(self.request("POST", "/api/analyze", {"text": "a" * 50_001})[0], 413)
         self.assertEqual(self.request("POST", "/api/robustness", {"text": "a" * 50_001})[0], 413)
+        self.assertEqual(self.request("POST", "/api/humanize", {"text": "a" * 50_001})[0], 413)
+
+    def test_humanize_abstains_without_adding_a_stage(self):
+        status, result = self.request("POST", "/api/humanize", {"text": "Too short."})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["reason"], "abstain")
+        self.assertEqual(result["text"], "Too short.")
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["steps"], [])
+        analyzed = self.request("POST", "/api/analyze", {"text": pipeline.SAMPLE})[1]
+        self.assertEqual([stage["id"] for stage in analyzed["stages"]],
+                         ["M1", "M2", "M3", "M4", "M5", "M6"])
 
     def test_robustness_abstains_without_adding_a_stage(self):
         status, result = self.request("POST", "/api/robustness", {"text": "A short sentence."})

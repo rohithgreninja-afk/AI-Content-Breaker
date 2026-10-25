@@ -32,7 +32,8 @@ training when one is unavailable. Training activity and failures stay visible
 in the sidebar, and refreshing the page reconnects to the active job.
 
 For analysis, paste English text or load the sample, then select **Analyze
-text**. The report opens with the M7 verdict block: M5a and M5b stay
+text**. **Humanize text** is separate: it rewrites from fired M5a rules and
+shows the M8 block. The report opens with the M7 verdict block: M5a and M5b stay
 separate. The rail and pipeline guide include **M7 Report**, which scrolls
 to that block. Expandable stages underneath are M1–M6: the lexer, symbol
 table, parser, all 89 features, the rule breakdown, and the robustness
@@ -70,6 +71,8 @@ Vite forwards `/api` to the loopback-only Python server:
   and the original console transcript.
 - `POST /api/robustness` with `{"text":"..."}`: the M6 fragility report alone.
   `POST /api/analyze` includes the same report as its last stage.
+- `POST /api/humanize` with `{"text":"..."}`: the M8 translation report.
+  Analysis does not call this.
 - `GET /api/sample`: the built-in demonstration passage.
 
 POST requests use `Content-Type: application/json`. The backend validates
@@ -142,11 +145,27 @@ triggers all five robustness edits.
 five fixed edits (synonym, transition wording, coordination, template
 interruption, adjacent swap) plus one compound copy, then reports feature
 deltas and whether M5a or M5b flipped. Edits that cannot apply are left out
-of the fragility fraction. It is a robustness check, not an evasion tool.
+of the fragility fraction.
 The workbench shows the same report as the M6 stage after **Analyze text**.
 Passages under 50 words abstain, and no flip is claimed. Rescoring uses
 M1–M5 only, so the harness does not edit a passage and then measure that
 edit again.
+
+`m8_humanize.py` is a separate translation pass. A fired M5a rule selects
+one fixed rewrite, then M1–M5 score the passage again. M5b is reported and
+does not choose the rewrite. The pass stops when both verdicts read human,
+no fired rule still has a rewrite, or six rewrites have been applied.
+Short passages are left unchanged. It is not an analysis stage.
+
+```powershell
+.venv\Scripts\python.exe src\m8_humanize.py
+.venv\Scripts\python.exe src\m8_humanize.py path\to\your_text.txt
+.venv\Scripts\python.exe src\m8_humanize.py --text "..."
+```
+
+The workbench **Humanize text** button calls `POST /api/humanize`. **Use in
+editor** loads the rewrite back into the source field. A human verdict after
+rewriting is still a model output, not proof of authorship.
 
 Use at least 50 words; the pipeline abstains on shorter inputs. A test run on
 the saved model's actual held-out data requires regenerating the sampled data
@@ -253,6 +272,7 @@ new generators, adversarial text, other languages, or unseen domains.
 - `src/pipeline.py`: `run_pipeline(text)` and the test/evaluation commands.
 - `src/m6_harness.py`: fixed robustness edits and separate M5a/M5b fragility.
 - `src/m7_cli.py`: verdict-first report for a passage, a file, or the sample.
+- `src/m8_humanize.py`: attribute-directed rewrite from fired M5a rules.
 - `tests/`: unit and regression tests; `scripts/`: exploratory data tools.
 - `data/`: generated CSV, manifest, and fetch caches (ignored).
 - `models/`: the trained classifier and its training report.

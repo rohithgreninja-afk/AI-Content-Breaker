@@ -1,5 +1,28 @@
 # PROGRESS
 
+## 2026-10-25: M8 attribute-directed translation
+
+- Added `src/m8_humanize.py`. A fired M5a rule selects one rewrite from a
+  fixed table, then M1–M5 score the passage again. M5b is recorded and does
+  not choose the edit. M8 is not in `STAGES` or `CORE_STAGES`, so Analyze
+  and the M6 harness still score the original text.
+- The pass order is coordinated split, subordinator split, commas before
+  bare coordinators, synonym collapse, then a later-repeat replacement.
+  `pos_verb_rate` has no meaning-preserving rewrite and is named when it
+  remains fired. The loop stops when both verdicts are human, no fired rule
+  still has a rewrite, or 6 passes have run. Under 50 words the text is
+  unchanged.
+- `POST /api/humanize` uses the same local-origin and size checks as
+  analysis. The workbench **Humanize text** button shows the passes, the
+  rewritten passage, **Copy text**, and **Use in editor**. The M1–M7 rail
+  is unchanged.
+- Run: `.venv\Scripts\python.exe src\m8_humanize.py`
+- Tests: `tests/test_m8_humanize.py` (15 tests) and the humanize cases in
+  `tests/test_web_api.py`. On the built-in sample the pass printed
+  `result: passed`, with M5a moving from 0.560 ai to 0.480 human and M5b
+  from 0.552 ai to 0.407 human, after four rewrites. The saved model file
+  was not rewritten.
+
 ## 2026-10-25: M7 reporting entry
 
 - Added `src/m7_cli.py`. A passage, a file, or the built-in sample goes in.
@@ -30,8 +53,7 @@
   (`tpl_score`), and an adjacent content-word swap (`rep_word_entropy`).
   Unapplied edits are left out of the fragility fraction. Under 50 words the
   baseline abstains and no flip is claimed. M5a and M5b are reported separately.
-- This is a robustness check of our own detector, not an evasion tool. The
-  edits are a fixed table. Nothing searches for a wording that flips a label.
+- The edits are a fixed table.
 - `POST /api/robustness` returns the same report. The workbench renders it
   as the M6 stage of the analysis, in the rail and the pipeline guide.
 - Run: `.venv\Scripts\python.exe src\m6_harness.py path\to\text.txt`
