@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-10-25: M8 documentation
+
+- README now opens with M0–M7 as the detector and M8 as the separate
+  translation pass. PRODUCT, DESIGN, the workbench direction, and the design
+  catalog describe **Humanize text** and the M8 block. The rail, sidebar, and
+  pipeline guide remain M1–M7.
+
 ## 2026-10-25: M8 attribute-directed translation
 
 - Added `src/m8_humanize.py`. A fired M5a rule selects one rewrite from a

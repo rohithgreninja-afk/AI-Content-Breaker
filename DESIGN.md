@@ -83,6 +83,13 @@ components:
     padding: "0 15px"
     height: "43px"
     width: "100%"
+  button-humanize:
+    textColor: "{colors.primary}"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    padding: "0 15px"
+    height: "43px"
+    width: "100%"
   button-outline:
     textColor: "{colors.primary}"
     typography: "{typography.button}"
@@ -130,16 +137,16 @@ components:
 
 **Creative North Star: "Analysis workbench"**
 
-The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The rail shows M1–M6 in processing order and M7 Report, which links to the verdict block.
+The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The rail shows M1–M6 in processing order and M7 Report, which links to the verdict block. Humanize text is a second action. Its M8 translation block sits above the analysis report and is not a rail item.
 
-This is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “No analysis yet,” and “M5a rule verdict” with “M5b model verdict,” each Human, AI, Abstain, or Unavailable. Avoid promotional or poetic language.
+This is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “Humanize text,” “No analysis yet,” and “M5a rule verdict” with “M5b model verdict,” each Human, AI, Abstain, or Unavailable. The M8 badge reads Passed, Already human, Not passed, or Abstain. Avoid promotional or poetic language.
 
 **Token ownership/runtime mapping:** [frontend/styles.css](frontend/styles.css) is canonical. Its root properties define the named colors and heading/mono families; its component selectors own size, spacing, radius, and state values. This file mirrors those values and documents their use. `colors.primary` maps to CSS `--blue`; all other frontmatter color names match their CSS property names. [frontend/main.tsx](frontend/main.tsx) loads the bundled fonts. [frontend/App.tsx](frontend/App.tsx) owns component semantics and state; [UX-CONTRACT.md](UX-CONTRACT.md) owns the workflow. There is no generated theme adapter. Change CSS first and update this document and `.impeccable/design.json` in the same change; compare frontmatter against the named CSS properties and component selectors before running `designmd lint`.
 
 **Key Characteristics:**
 
 - Clear separation between source text, model readiness, and results.
-- A visible M1–M7 rail. M1–M6 follow the pipeline; M7 is the report.
+- A visible M1–M7 rail. M1–M6 follow the pipeline; M7 is the report. M8 is the translation block, not an eighth rail item.
 - Flat surfaces, thin borders, and limited color accents.
 - Direct labels, explicit states, and inspectable technical output.
 
@@ -230,7 +237,7 @@ Busy states use the app's Lucide spinner, changing text, and disabled controls. 
 
 ### Buttons
 
-The primary Analyze action is full width with a 43px fixed height, deep blue fill, white text, a leading Play or loading icon, and a trailing arrow. Its hover color is `blue-hover`. The outlined model action has a gray-blue border, blue text, and a pale blue hover fill. Load sample is a compact blue text action with an underline on hover. Clear is muted until its enabled red hover state. Copy report replaces its label with “Copied” within reserved label width.
+The primary Analyze action is full width with a 43px fixed height, deep blue fill, white text, a leading Play or loading icon, and a trailing arrow. Its hover color is `blue-hover`. Humanize text uses the same width, height, and trailing arrow, with the outline treatment: a gray-blue border, blue text, a pen icon, and a pale blue hover fill. It sits 8px below Analyze. Its busy label is “Humanizing text…”. The outlined model action has the same border treatment at a shorter height. Load sample is a compact blue text action with an underline on hover. Clear is muted until its enabled red hover state. Copy report and Copy text replace their labels with “Copied”. Use in editor is a text action beside Copy text.
 
 ### Chips and status
 
@@ -252,7 +259,7 @@ Sidebar links use an icon, label, and rounded row. Hover adds a pale fill; the c
 
 Native `details`/`summary` rows show a stage code, title, concise summary, and chevron. Hover adds a slight gray fill; the chevron rotates with the disclosure state. Stage bodies expose counts, tokens, word frequencies, parse structures, feature values, and scoring rules. Feature lists and rule tables use 12px text on desktop and mobile. Tables use muted headers and horizontal borders; technical content scrolls inside its region.
 
-The verdict block is labeled M7 · Report and states the M5a rule verdict before the M5b model verdict. Score meters have a thin track with a visible midpoint at the fixed 0.5 threshold. The rule meter uses the ochre fill and the model meter uses the blue-gray fill. Below the word gate, both display an em dash and explicit abstention text. The robustness table uses the same 12px faces as the rule table and wraps inside the stage, with no horizontal scrollbar. Preserve the visible statement that scores are model outputs, not proof of authorship.
+The verdict block is labeled M7 · Report and states the M5a rule verdict before the M5b model verdict. The translation block is labeled M8 · Translation. A native select chooses Before humanizing report or After humanizing report. The chosen report uses the same verdict heading, score meters, and passage field as the rest of the workbench. The translation-pass table sits below that report, with the same row padding and wrapping behavior as the robustness table. A stale rewrite uses the same pale ochre notice as a stale analysis. Score meters have a thin track with a visible midpoint at the fixed 0.5 threshold. The rule meter uses the ochre fill and the model meter uses the blue-gray fill. Below the word gate, both display an em dash and explicit abstention text. The robustness table uses the same 12px faces as the rule table and wraps inside the stage, with no horizontal scrollbar. Preserve the visible statement that scores are model outputs, not proof of authorship.
 
 ### Iconography and motion
 
@@ -260,14 +267,14 @@ Icons come from `lucide-react`; normal inline sizes range from 13px to 19px, wit
 
 ### Content
 
-Name the operation or state directly. Use the implemented vocabulary consistently: “Check model,” “Check & train model,” “Analyze text,” “Pipeline,” “Console,” and “Copy report.” Empty results state “No analysis yet” and explain the next action. Preserve explicit Human, AI, unavailable, and abstention wording. Pipeline terms belong here because inspecting the compiler stages is the user's task.
+Name the operation or state directly. Use the implemented vocabulary consistently: “Check model,” “Check & train model,” “Analyze text,” “Humanize text,” “Pipeline,” “Console,” “Copy report,” “Copy text,” and “Use in editor.” Empty results state “No analysis yet” and explain the next action. Preserve explicit Human, AI, unavailable, and abstention wording, and the M8 statuses Passed, Already human, Not passed, and Abstain. Pipeline terms belong here because inspecting the compiler stages is the user's task. State that a human verdict after rewriting is this detector’s output.
 
 ## Do's and Don'ts
 
 ### Do:
 
 - **Do** keep the source, results, and model state visually distinct.
-- **Do** use the actual M1–M6 stages, the M7 report label, and direct action labels.
+- **Do** use the actual M1–M6 stages, the M7 report label, the M8 translation block, and direct action labels.
 - **Do** keep visible keyboard focus and explicit status text.
 - **Do** keep technical data scrollable within its report region.
 - **Do** update this record with the canonical CSS when shared visual values change.

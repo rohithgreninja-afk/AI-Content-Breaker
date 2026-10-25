@@ -660,26 +660,120 @@ textarea[aria-invalid="true"] {
   gap: 9px;
 }
 .humanize-block {
-  padding: 18px 23px 4px;
+  padding: 24px 23px 22px;
   border-bottom: 1px solid var(--line);
+}
+.humanize-block .overview-heading {
+  margin-bottom: 16px;
+}
+.humanize-block .overview-heading h3 {
+  font-size: 17px;
+}
+.humanize-block .stale-notice {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 6px;
+}
+.humanize-note {
+  margin: 0 0 20px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.humanize-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.humanize-picker span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.humanize-picker select {
+  width: 100%;
+  height: 43px;
+  border: 1px solid #dce3e9;
+  border-radius: 6px;
+  background: #fbfcfd;
+  color: var(--ink);
+  font-family: "IBM Plex Sans Variable", sans-serif;
+  font-size: 13px;
+  padding: 0 14px;
+}
+.humanize-picker select:hover {
+  border-color: #b7c6d3;
+}
+.humanize-picker select:focus-visible {
+  outline: 3px solid var(--ochre);
+  outline-offset: 4px;
+  border-color: var(--blue);
+}
+.humanize-report h3 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 18px;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  line-height: 1.6;
+  letter-spacing: -0.4px;
+  font-weight: 650;
+}
+.humanize-fired {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink);
 }
 .humanize-block .small-label {
   display: block;
-  margin-top: 16px;
+  margin: 22px 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
 }
 .humanize-block textarea {
-  margin-top: 8px;
-  min-height: 160px;
-  line-height: 1.7;
-}
-.humanize-block .robustness-scroll {
-  margin-top: 16px;
+  height: 220px;
+  min-height: 180px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.85;
 }
 .humanize-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin: 10px 0 14px;
+  gap: 18px;
+  margin-top: 14px;
+}
+.humanize-passes {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.humanize-passes > .small-label {
+  margin: 0 0 14px;
+}
+.humanize-passes > .stage-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.humanize-table th,
+.humanize-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  padding-right: 16px;
+  line-height: 1.5;
+}
+.humanize-table .pair-label {
+  margin-right: 8px;
+  color: var(--muted);
+  font-family: "IBM Plex Sans Variable", sans-serif;
+  font-size: 11px;
 }
 .robustness-block {
   margin-top: 0;
@@ -1465,6 +1559,7 @@ td {
     padding-inline: 18px;
   }
   .report-overview,
+  .humanize-block,
   .stage-body,
   .console-report {
     padding-inline: 18px;
@@ -1684,6 +1779,14 @@ td {
     font-size: 16px;
     line-height: 1.7;
     padding: 14px;
+  }
+  .humanize-block textarea {
+    height: 220px;
+    font-size: 16px;
+    line-height: 1.7;
+  }
+  .humanize-report h3 {
+    font-size: 16px;
   }
   .source-footnote {
     font-size: 9px;

@@ -2,8 +2,10 @@
 
 Compiler-design course project: an AI-generated-text detector that maps lexing,
 symbol tables, CFG parsing, automata, and attribute grammars onto text analysis.
-M0–M5 are implemented. M5b is a 300-tree ExtraTrees classifier over 89 lexical
-and syntactic features, selected using training-only grouped validation.
+M0–M5 score a passage, M6 measures fixed edits, and M7 prints the report. M8 is
+a separate translation pass: a fired M5a rule selects one fixed rewrite, then
+M1–M5 score that passage again. M5b is a 300-tree ExtraTrees classifier over 89
+lexical and syntactic features, selected using training-only grouped validation.
 Logistic regression remains available as the reference model.
 
 ## Run the React workbench

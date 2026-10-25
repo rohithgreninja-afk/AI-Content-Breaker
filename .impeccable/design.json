@@ -305,6 +305,14 @@
       "css": ".ds-analyze{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:6px;font-family:'IBM Plex Sans Variable',sans-serif;font-weight:500;cursor:pointer;transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease;justify-content:space-between;background:var(--blue,#244b68);color:var(--paper,#fff);width:100%;height:43px;padding:0 15px;font-size:13px}.ds-analyze>span{display:flex;align-items:center;gap:9px}.ds-analyze:hover:not(:disabled){background:var(--blue-hover,#183a54)}.ds-analyze:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-analyze:active:not(:disabled){transform:translateY(1px)}.ds-analyze:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-analyze{transition:none}}"
     },
     {
+      "name": "Humanize text",
+      "kind": "button",
+      "refersTo": "button-humanize",
+      "description": "Full-width outline action under Analyze. Busy label is Humanizing text.",
+      "html": "<button class=\"ds-humanize\"><span>Humanize text</span><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-humanize{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;border-radius:6px;font-family:'IBM Plex Sans Variable',sans-serif;font-weight:500;cursor:pointer;transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease;width:100%;height:43px;padding:0 15px;margin-top:8px;font-size:13px;background:transparent;border:1px solid #cbd5df;color:var(--blue,#244b68)}.ds-humanize>span{display:flex;align-items:center;gap:9px}.ds-humanize:hover:not(:disabled){border-color:#a7b9c9;background:#e3eaf0}.ds-humanize:focus-visible{outline:3px solid var(--ochre,#a27624);outline-offset:4px;}.ds-humanize:active:not(:disabled){transform:translateY(1px)}.ds-humanize:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-humanize{transition:none}}"
+    },
+    {
       "name": "Check model",
       "kind": "button",
       "refersTo": "button-outline",
@@ -379,10 +387,10 @@
   ],
   "narrative": {
     "northStar": "Analysis workbench",
-    "overview": "The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The M1–M5 rail identifies the actual processing order and links to each stage.\n\nThis is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “No analysis yet,” and “Model verdict: Human” or “Model verdict: AI.” Avoid promotional or poetic language.",
+    "overview": "The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The rail shows M1–M6 in processing order and M7 Report, which links to the verdict block. Humanize text is a second action. Its M8 translation block sits above the analysis report and is not a rail item.\n\nThis is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “Humanize text,” “No analysis yet,” and “M5a rule verdict” with “M5b model verdict,” each Human, AI, Abstain, or Unavailable. The M8 badge reads Passed, Already human, Not passed, or Abstain. Avoid promotional or poetic language.",
     "keyCharacteristics": [
       "Clear separation between source text, model readiness, and results.",
-      "A visible M1–M5 sequence grounded in the real pipeline.",
+      "A visible M1–M7 rail. M1–M6 follow the pipeline; M7 is the report. M8 is the translation block, not an eighth rail item.",
       "Flat surfaces, thin borders, and limited color accents.",
       "Direct labels, explicit states, and inspectable technical output."
     ],
@@ -400,7 +408,7 @@
     ],
     "dos": [
       "Do keep the source, results, and model state visually distinct.",
-      "Do use the actual M1–M5 stages and direct action labels.",
+      "Do use the actual M1–M6 stages, the M7 report label, the M8 translation block, and direct action labels.",
       "Do keep visible keyboard focus and explicit status text.",
       "Do keep technical data scrollable within its report region.",
       "Do update this record with the canonical CSS when shared visual values change."

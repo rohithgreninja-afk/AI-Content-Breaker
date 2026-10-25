@@ -632,125 +632,186 @@ function humanizeNote(report: HumanizeReport) {
 
 function HumanizeBlock({
   report,
+  source,
   stale,
   copied,
   onCopy,
   onUse,
 }: {
   report: HumanizeReport;
+  source: string;
   stale: boolean;
   copied: boolean;
-  onCopy: () => void;
+  onCopy: (passage: string) => void;
   onUse: () => void;
 }) {
+  const [side, setSide] = useState<"before" | "after">("after");
+  useEffect(() => {
+    setSide("after");
+  }, [report]);
+  const chosen = side === "before" ? report.before : report.after;
+  const passage = side === "before" ? source : report.text;
   const status = humanizeStatus(report);
   return (
     <div className="humanize-block" id="stage-M8">
       <div className="overview-heading">
         <div>
           <p className="report-kicker">M8 · Translation</p>
-          <h3>
-            <span>
-              M5a rule verdict:{" "}
-              {verdictWord(report.after.rule_verdict, report.after.abstain)}
-            </span>
-            <span>
-              M5b model verdict:{" "}
-              {verdictWord(report.after.model_verdict, report.after.abstain)}
-            </span>
-          </h3>
+          <h3>Translation result</h3>
         </div>
-        <span
-          className={`report-badge${report.passed ? " complete" : ""}`}
-        >
+        <span className={`report-badge${report.passed ? " complete" : ""}`}>
           {status}
         </span>
       </div>
       {stale && (
-        <p className="stale-notice">
+        <p className="stale-notice humanize-stale">
           <TriangleAlert size={15} />
           This rewrite is for the previous text. Humanize again to update it.
         </p>
       )}
-      <p className="stage-note">{report.purpose}</p>
-      <p className="stage-note">{humanizeNote(report)}</p>
-      <dl className="metric-grid report-metrics">
-        <Metric
-          label="M5a before"
-          value={verdictWord(report.before.rule_verdict, report.before.abstain)}
-        />
-        <Metric
-          label="M5b before"
-          value={verdictWord(
-            report.before.model_verdict,
-            report.before.abstain,
-          )}
-        />
-        <Metric
-          label="M5a after"
-          value={`${verdictWord(report.after.rule_verdict, report.after.abstain)} ${format(report.after.rule_score)}`}
-        />
-        <Metric
-          label="M5b after"
-          value={
-            report.after.model_score === null
-              ? verdictWord(report.after.model_verdict, report.after.abstain)
-              : `${verdictWord(report.after.model_verdict, report.after.abstain)} ${format(report.after.model_score)}`
+      <p className="humanize-note">{humanizeNote(report)}</p>
+      <label className="humanize-picker">
+        <span id="humanize-report-label">Report</span>
+        <select
+          aria-labelledby="humanize-report-label"
+          value={side}
+          onChange={(event) =>
+            setSide(event.target.value === "before" ? "before" : "after")
           }
-        />
-      </dl>
-      {report.steps.length > 0 && (
-        <div className="robustness-scroll">
-          <table className="robustness-table">
-            <thead>
-              <tr>
-                <th scope="col">Attribute</th>
-                <th scope="col">Rewrite</th>
-                <th scope="col">Feature</th>
-                <th scope="col">M5a</th>
-                <th scope="col">M5b</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.steps.map((step, index) => (
-                <tr key={`${step.attribute}-${index}`}>
-                  <td className="text">{step.attribute}</td>
-                  <td className="text">{step.name}</td>
-                  <td className="num">
-                    {format(step.feature_before, 4)} → {format(step.feature_after, 4)}
-                  </td>
-                  <td className="text">
-                    {verdictWord(step.rule_verdict, false)} {format(step.rule_score)}
-                  </td>
-                  <td className="text">
-                    {step.model_score === null
-                      ? "Unavailable"
-                      : `${verdictWord(step.model_verdict, false)} ${format(step.model_score)}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <label className="small-label" htmlFor="rewritten-passage">
-        Rewritten passage
+        >
+          <option value="before">Before humanizing report</option>
+          <option value="after">After humanizing report</option>
+        </select>
       </label>
-      <textarea
-        id="rewritten-passage"
-        readOnly
-        value={report.text}
-        rows={8}
-      />
-      <div className="humanize-actions">
-        <button type="button" className="text-button" onClick={onCopy}>
-          <Copy size={14} />
-          {copied ? "Copied" : "Copy text"}
-        </button>
-        <button type="button" className="text-button" onClick={onUse}>
-          <PenLine size={14} />
-          Use in editor
-        </button>
+      <div className="humanize-report">
+        <h3>
+          <span>
+            M5a rule verdict:{" "}
+            {verdictWord(chosen.rule_verdict, chosen.abstain)}
+          </span>
+          <span>
+            M5b model verdict:{" "}
+            {verdictWord(chosen.model_verdict, chosen.abstain)}
+          </span>
+        </h3>
+        <Score
+          className="score-rule"
+          label="M5a · Rule-based scorer"
+          value={chosen.rule_score}
+          verdict={chosen.rule_verdict}
+          abstain={chosen.abstain}
+        />
+        <Score
+          className="score-model"
+          label="M5b · Trained model"
+          value={chosen.model_score}
+          verdict={chosen.model_verdict}
+          abstain={chosen.abstain}
+        />
+        <p className="score-note">
+          Scores are model outputs, not proof of authorship.
+        </p>
+        <dl className="metric-grid report-metrics">
+          <Metric label="Words" value={chosen.n_words} />
+          <Metric label="Fired rules" value={chosen.fired.length} />
+        </dl>
+        {chosen.fired.length > 0 && (
+          <p className="humanize-fired">{chosen.fired.join(", ")}</p>
+        )}
+        <label className="small-label" htmlFor="humanize-passage">
+          {side === "before" ? "Original passage" : "Rewritten passage"}
+        </label>
+        <textarea
+          id="humanize-passage"
+          className="resize-none"
+          readOnly
+          value={passage}
+        />
+        <div className="humanize-actions">
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => onCopy(passage)}
+          >
+            <Copy size={14} />
+            {copied ? "Copied" : "Copy text"}
+          </button>
+          {side === "after" && (
+            <button type="button" className="text-button" onClick={onUse}>
+              <PenLine size={14} />
+              Use in editor
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="humanize-passes">
+        <p className="small-label">Translation passes</p>
+        {report.steps.length === 0 ? (
+          <p className="stage-note">No rewrite was applied.</p>
+        ) : (
+          <div className="robustness-scroll">
+            <table className="robustness-table humanize-table">
+              <colgroup>
+                <col style={{ width: "28%" }} />
+                <col style={{ width: "27%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "14%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col">Rewrite</th>
+                  <th scope="col">Attribute</th>
+                  <th scope="col">Feature</th>
+                  <th scope="col">M5a</th>
+                  <th scope="col">M5b</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.steps.map((step, index) => (
+                  <tr key={`${step.attribute}-${index}`}>
+                    <td className="text" data-label="Rewrite">
+                      {step.name}
+                    </td>
+                    <td className="text" data-label="Attribute">
+                      {step.attribute}
+                    </td>
+                    <td className="num" data-label="Feature">
+                      <span className="robustness-pair">
+                        <span>
+                          <span className="pair-label">Before</span>
+                          {format(step.feature_before, 4)}
+                        </span>
+                        <span>
+                          <span className="pair-label">After</span>
+                          {format(step.feature_after, 4)}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="text" data-label="M5a">
+                      <span className="robustness-pair">
+                        <span>{verdictWord(step.rule_verdict, false)}</span>
+                        <span>{format(step.rule_score)}</span>
+                      </span>
+                    </td>
+                    <td className="text" data-label="M5b">
+                      {step.model_score === null ? (
+                        "Unavailable"
+                      ) : (
+                        <span className="robustness-pair">
+                          <span>
+                            {verdictWord(step.model_verdict, false)}
+                          </span>
+                          <span>{format(step.model_score)}</span>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -766,6 +827,9 @@ export default function App() {
   const [checking, setChecking] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [humanizing, setHumanizing] = useState(false);
+  const [reportMode, setReportMode] = useState<"analyze" | "humanize" | null>(
+    null,
+  );
   const [humanize, setHumanize] = useState<HumanizeReport | null>(null);
   const [humanizedText, setHumanizedText] = useState("");
   const [copiedRewrite, setCopiedRewrite] = useState(false);
@@ -876,6 +940,7 @@ export default function App() {
       return;
     }
     const submitted = text;
+    setReportMode("analyze");
     setAnalyzing(true);
     setError("");
     setCopied(false);
@@ -914,6 +979,7 @@ export default function App() {
       return;
     }
     const submitted = text;
+    setReportMode("humanize");
     setHumanizing(true);
     setError("");
     setCopiedRewrite(false);
@@ -936,10 +1002,9 @@ export default function App() {
     }
   }
 
-  async function copyRewrite() {
-    if (!humanize) return;
+  async function copyRewrite(passage: string) {
     try {
-      await navigator.clipboard.writeText(humanize.text);
+      await navigator.clipboard.writeText(passage);
       setCopiedRewrite(true);
       window.clearTimeout(rewriteTimer.current);
       rewriteTimer.current = window.setTimeout(
@@ -1130,9 +1195,13 @@ export default function App() {
             {rail.map(({ id, name, description, icon: Icon }) => (
               <a
                 key={id}
-                href={result ? `#stage-${id}` : "#pipeline-guide"}
+                href={
+                  reportMode === "analyze" && result
+                    ? `#stage-${id}`
+                    : "#pipeline-guide"
+                }
                 onClick={() => {
-                  if (!result) {
+                  if (reportMode !== "analyze" || !result) {
                     if (guide.current) guide.current.open = true;
                   } else if (id !== "M7") setView("pipeline");
                 }}
@@ -1282,7 +1351,7 @@ export default function App() {
             </section>
 
             <section
-              className={`results-panel ${result || humanize ? "has-result" : ""}`}
+              className={`results-panel ${reportMode === "analyze" ? (result ? "has-result" : "") : reportMode === "humanize" && humanize ? "has-result" : ""}`}
               aria-labelledby="results-heading"
               aria-busy={busy}
             >
@@ -1290,34 +1359,36 @@ export default function App() {
                 <div>
                   <Microscope size={18} />
                   <h2 id="results-heading" ref={resultHeading} tabIndex={-1}>
-                    Analysis report
+                    {reportMode === "humanize" ? "Translation" : "Analysis report"}
                   </h2>
                 </div>
-                <span className={`report-badge ${result || humanize?.passed ? "complete" : ""}`}>
+                <span className={`report-badge ${(reportMode === "analyze" && result) || (reportMode === "humanize" && humanize?.passed) ? "complete" : ""}`}>
                   {analyzing
                     ? "Processing"
                     : humanizing
                       ? "Humanizing"
-                      : result
+                      : reportMode === "analyze" && result
                         ? stale
                           ? "Text edited"
                           : "Complete"
-                        : humanize
+                        : reportMode === "humanize" && humanize
                           ? humanizeStatus(humanize)
                           : "Awaiting text"}
                 </span>
               </div>
-              {humanize && (
+              {reportMode === "humanize" && humanize && (
                 <HumanizeBlock
+                  key={humanizedText}
                   report={humanize}
+                  source={humanizedText}
                   stale={rewriteStale}
                   copied={copiedRewrite}
                   onCopy={copyRewrite}
                   onUse={useRewrite}
                 />
               )}
-              {!result ? (
-                humanize ? null : (
+              {reportMode !== "analyze" || !result ? (
+                reportMode === "humanize" && humanize ? null : (
                 <div className="empty-report">
                   <div
                     className={`empty-mark ${analyzing ? "empty-mark-loading" : ""}`}
