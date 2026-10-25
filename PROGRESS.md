@@ -1,5 +1,23 @@
 # PROGRESS
 
+## 2026-10-25: M7 reporting entry
+
+- Added `src/m7_cli.py`. A passage, a file, or the built-in sample goes in.
+  The verdict block comes out first, then the existing M1–M6 transcript.
+  `demo.py --text` calls this entry. `--test` and `--eval` still forward to
+  `pipeline.main`.
+- M7 is not in `STAGES` or `CORE_STAGES`. M6 still rescores through M1–M5
+  only. The report keeps M5a (`rule_score`) and M5b (`clf_score`) separate
+  and does not call either a confidence. Under 50 words both verdicts abstain.
+- The workbench labels that same block **M7 · Report**. The rail and the
+  pipeline guide include M7 and scroll to it. Stage disclosures stay M1–M6.
+  Console and Copy report start with the two verdict lines.
+- Run: `.venv\Scripts\python.exe src\m7_cli.py`
+- Tests: `tests/test_m7_cli.py` (4 tests). A bare
+  `src\m7_cli.py` on the built-in sample printed `M5a ai` at 0.560 and
+  `M5b ai` at 0.552, then every stage heading from M1 through M6. Fragility
+  on that run was M5a 0/6 and M5b 1/6. The saved model file was not rewritten.
+
 ## 2026-10-25: M6 robustness harness
 
 - Added `src/m6_harness.py` and the pipeline row

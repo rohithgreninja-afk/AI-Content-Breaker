@@ -16,7 +16,7 @@ The primary use is a course demonstration, confirmed by the user. Pipeline detai
 
 ## Product Purpose
 
-Analyze English text through the existing compiler-inspired M1–M5 pipeline and organize everything currently printed by the CLI into a readable interface.
+Analyze English text through the compiler pipeline and present the M7 report: both verdicts first, then the M1–M6 stages.
 
 ## Operating Context
 
@@ -25,7 +25,7 @@ Local development on Windows, with a Python virtual environment. The frontend an
 ## Capabilities and Constraints
 
 - Check whether the actual saved model can load. When it cannot, the same action starts training with visible status and errors.
-- Accept text and display lexer, symbol table, parser and templates, feature vector, rule scoring, trained-model scoring, and original terminal output.
+- Accept text and display the M7 verdict block, then the lexer, symbol table, parser and templates, feature vector, rule scoring, trained-model scoring, robustness table, and the verdict-first transcript.
 - Preserve the 50-word abstention gate and fixed 0.5 classification threshold.
 - Preserve the committed training-only model selection and provenance checks.
 - Scores are experimental model outputs, not proof of authorship.

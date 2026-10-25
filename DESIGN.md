@@ -130,16 +130,16 @@ components:
 
 **Creative North Star: "Analysis workbench"**
 
-The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The M1–M5 rail identifies the actual processing order and links to each stage.
+The interface presents source text beside an inspectable report. Thin borders, cool neutral surfaces, and restrained blue actions keep the pipeline readable during a course demonstration. The rail shows M1–M6 in processing order and M7 Report, which links to the verdict block.
 
-This is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “No analysis yet,” and “Model verdict: Human” or “Model verdict: AI.” Avoid promotional or poetic language.
+This is a product interface for local use on Windows. The current interface and supported analysis text are English; no market-specific visual or business assumptions are established. Copy uses direct labels and instructions: “Text analysis,” “Analyze text,” “No analysis yet,” and “M5a rule verdict” with “M5b model verdict,” each Human, AI, Abstain, or Unavailable. Avoid promotional or poetic language.
 
 **Token ownership/runtime mapping:** [frontend/styles.css](frontend/styles.css) is canonical. Its root properties define the named colors and heading/mono families; its component selectors own size, spacing, radius, and state values. This file mirrors those values and documents their use. `colors.primary` maps to CSS `--blue`; all other frontmatter color names match their CSS property names. [frontend/main.tsx](frontend/main.tsx) loads the bundled fonts. [frontend/App.tsx](frontend/App.tsx) owns component semantics and state; [UX-CONTRACT.md](UX-CONTRACT.md) owns the workflow. There is no generated theme adapter. Change CSS first and update this document and `.impeccable/design.json` in the same change; compare frontmatter against the named CSS properties and component selectors before running `designmd lint`.
 
 **Key Characteristics:**
 
 - Clear separation between source text, model readiness, and results.
-- A visible M1–M5 sequence grounded in the real pipeline.
+- A visible M1–M7 rail. M1–M6 follow the pipeline; M7 is the report.
 - Flat surfaces, thin borders, and limited color accents.
 - Direct labels, explicit states, and inspectable technical output.
 
@@ -197,13 +197,13 @@ Use sentence case. Actual stage identifiers, code, and domain abbreviations reta
 
 ## Layout
 
-The desktop shell has a sticky 224px sidebar and a flexible content column. The top bar is 65px tall. Main content has a maximum width of `page-max` with `page` padding; its 40px top padding becomes 50px at 1600px and above. The five equal pipeline stages sit above a source/report grid with columns `0.86fr 1.14fr` and a 23px gap. Panel headings are 61px tall, and most panel content uses `panel` padding.
+The desktop shell has a sticky 224px sidebar and a flexible content column. The top bar is 65px tall. Main content has a maximum width of `page-max` with `page` padding; its 40px top padding becomes 50px at 1600px and above. Seven equal rail items sit above a source/report grid with columns `0.86fr 1.14fr` and a 23px gap. Panel headings are 61px tall, and most panel content uses `panel` padding.
 
 The spacing is component-specific; there is no enforced 4px or 8px scale. Shared roles in frontmatter record actual values. Keep document scrolling for the page, with internal scrolling for long tokens, trees, tables, training logs, and console text. The root reserves the scrollbar gutter and the shell uses `minmax(0, …)` to keep wide report content contained.
 
 - **At 1280px and below:** sidebar becomes 200px; main side padding is 25px; panel padding and the source/report gap reduce to 18px. Rail descriptions are hidden.
 - **At 1060px and below:** sidebar becomes 180px; the source and report stack in that order; main side padding is 22px; the guide uses three columns.
-- **At 700px and below:** sidebar becomes an in-flow header with a compact model panel; only the active sidebar link remains visible. Main side padding is `page-compact`, the top bar becomes 43px, and the guide uses two columns. All five pipeline stages remain visible.
+- **At 700px and below:** sidebar becomes an in-flow header with a compact model panel; only the active sidebar link remains visible. Main side padding is `page-compact`, the top bar becomes 43px, and the guide uses two columns. The rail uses three columns, so all seven items remain visible by wrapping.
 - **At 1600px and above:** passage field height grows from 303px to 355px. Its height is 230px at the tablet breakpoint and 255px on mobile.
 
 The empty report has a deliberate minimum height (640px desktop, 430px tablet, 415px mobile; 692px on wide displays). Feedback reserves a 24px form region; the Analyze action remains 43px tall during processing. The complete report grows with its contents.
@@ -234,7 +234,7 @@ The primary Analyze action is full width with a 43px fixed height, deep blue fil
 
 ### Chips and status
 
-The compact report badge labels “Awaiting text,” “Processing,” “Complete,” or “Text edited.” Its completed state uses green text and a pale green fill. M1–M5 labels and lexer tokens are data identifiers, not interactive filter chips. Token categories pair their tints with visible type labels.
+The compact report badge labels “Awaiting text,” “Processing,” “Complete,” or “Text edited.” Its completed state uses green text and a pale green fill. M1–M7 labels and lexer tokens are data identifiers, not interactive filter chips. Token categories pair their tints with visible type labels.
 
 ### Cards / Containers
 
@@ -246,13 +246,13 @@ The labeled passage textarea uses a near-white fill, gray-blue border, `control`
 
 ### Navigation
 
-Sidebar links use an icon, label, and rounded row. Hover adds a pale fill; the current Text analysis link has a stronger pale blue fill, blue text, and increased weight. Breadcrumbs are subdued and do not compete with the title. The five-stage rail represents M1 through M5; before analysis it opens the guide, and after analysis it opens the corresponding report stage. The mobile transformation is documented in Layout.
+Sidebar links use an icon, label, and rounded row. Hover adds a pale fill; the current Text analysis link has a stronger pale blue fill, blue text, and increased weight. Breadcrumbs are subdued and do not compete with the title. The rail represents M1 through M7. Before analysis every item opens the guide. After analysis, M1–M6 open their stage disclosures and M7 scrolls to the verdict block. The mobile transformation is documented in Layout.
 
 ### Pipeline disclosures and data
 
 Native `details`/`summary` rows show a stage code, title, concise summary, and chevron. Hover adds a slight gray fill; the chevron rotates with the disclosure state. Stage bodies expose counts, tokens, word frequencies, parse structures, feature values, and scoring rules. Feature lists and rule tables use 12px text on desktop and mobile. Tables use muted headers and horizontal borders; technical content scrolls inside its region.
 
-Score meters have a thin track with a visible midpoint at the fixed 0.5 threshold. Model and rule results have separate labels, numeric values, and verdict captions. Below the word gate, both display an em dash and explicit abstention text. Preserve the visible statement that scores are model outputs, not proof of authorship.
+The verdict block is labeled M7 · Report and states the M5a rule verdict before the M5b model verdict. Score meters have a thin track with a visible midpoint at the fixed 0.5 threshold. The rule meter uses the ochre fill and the model meter uses the blue-gray fill. Below the word gate, both display an em dash and explicit abstention text. The robustness table uses the same 12px faces as the rule table and wraps inside the stage, with no horizontal scrollbar. Preserve the visible statement that scores are model outputs, not proof of authorship.
 
 ### Iconography and motion
 
@@ -267,7 +267,7 @@ Name the operation or state directly. Use the implemented vocabulary consistentl
 ### Do:
 
 - **Do** keep the source, results, and model state visually distinct.
-- **Do** use the actual M1–M5 stages and direct action labels.
+- **Do** use the actual M1–M6 stages, the M7 report label, and direct action labels.
 - **Do** keep visible keyboard focus and explicit status text.
 - **Do** keep technical data scrollable within its report region.
 - **Do** update this record with the canonical CSS when shared visual values change.

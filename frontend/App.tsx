@@ -26,6 +26,7 @@ import {
   Play,
   RefreshCw,
   ScanText,
+  ScrollText,
   ShieldCheck,
   Terminal,
   Trash2,
@@ -72,6 +73,22 @@ const stages = [
     icon: ShieldCheck,
   },
 ];
+const reportEntry = {
+  id: "M7",
+  name: "Report",
+  description: "Verdicts → transcript",
+  icon: ScrollText,
+};
+const rail = [...stages, reportEntry];
+const guideBlurbs = [
+  "A maximal-munch lexer identifies words, numbers, punctuation, and sentence endings.",
+  "A symbol table tracks each word’s frequency and position in the token stream.",
+  "A recursive-descent grammar builds sentence trees. POS automata detect structural templates.",
+  "The feature extractor turns lexical and syntactic attributes into 89 measurable signals.",
+  "Nine inspectable rules and a trained classifier independently score the same passage.",
+  "Five fixed edits and one combined copy are rescored. Fragility is how often our own verdict moves.",
+  "Both verdicts come first, then the M1–M6 transcript. This is the report, not another analysis stage.",
+];
 const format = (value: number, places = 3) =>
   value.toLocaleString("en-IN", {
     maximumFractionDigits: places,
@@ -112,16 +129,49 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function verdictWord(value: string | null, abstain: boolean) {
+  if (abstain) return "Abstain";
+  if (value === "ai") return "AI";
+  if (value === "human") return "Human";
+  return "Unavailable";
+}
+
+function reportTranscript(result: Analysis, characters: number) {
+  const summary = result.summary;
+  const rule = summary.abstain ? "abstain" : summary.rule_verdict;
+  const model = summary.abstain
+    ? "abstain"
+    : (summary.model_verdict ?? "unavailable");
+  const score = (value: number | null) =>
+    value === null ? "n/a" : value.toFixed(3);
+  const lines = [
+    `M5a rule verdict = ${rule}  rule_score=${score(summary.rule_score)}`,
+    `M5b model verdict = ${model}  clf_score=${score(summary.model_score)}`,
+  ];
+  if (summary.abstain) {
+    lines.push(
+      `abstain: only ${summary.n_words} words; both scorers need at least ${summary.min_words} words for a verdict`,
+    );
+  }
+  lines.push(
+    `source: web text (${characters} characters, ${summary.n_words} words)`,
+  );
+  const stages = result.console_output.replace(/^input:.*\n/, "");
+  return `${lines.join("\n")}\n${stages}`;
+}
+
 function Score({
   label,
   value,
   verdict,
   abstain,
+  className,
 }: {
   label: string;
   value: number | null;
   verdict: string | null;
   abstain: boolean;
+  className: string;
 }) {
   const readable = abstain
     ? "Insufficient text"
@@ -131,7 +181,7 @@ function Score({
         ? "Verdict: Human"
         : "Model unavailable";
   return (
-    <div className="score">
+    <div className={`score ${className}`}>
       <div className="score-heading">
         <span>{label}</span>
         <span className="score-value">
@@ -643,7 +693,9 @@ export default function App() {
 
   async function copyReport() {
     try {
-      await navigator.clipboard.writeText(result!.console_output);
+      await navigator.clipboard.writeText(
+        reportTranscript(result!, analyzedText.length),
+      );
       setCopied(true);
       window.clearTimeout(copyTimer.current);
       copyTimer.current = window.setTimeout(() => setCopied(false), 2500);
@@ -758,7 +810,7 @@ export default function App() {
             <ShieldCheck size={15} />
             <span>Runs on your machine</span>
           </div>
-          <span className="sidebar-version">AI Content Breaker / M1–M6</span>
+          <span className="sidebar-version">AI Content Breaker / M1–M7</span>
         </div>
       </aside>
 
@@ -782,20 +834,21 @@ export default function App() {
             <span className="project-label">
               Compiler design
               <br />
-              <strong>M1–M6 pipeline</strong>
+              <strong>M1–M7 pipeline</strong>
             </span>
           </div>
           <div
             className={`pipeline-rail ${analyzing ? "pipeline-running" : ""}`}
-            aria-label="Five-stage analysis pipeline"
+            aria-label="Analysis pipeline and M7 report"
           >
-            {stages.map(({ id, name, description, icon: Icon }) => (
+            {rail.map(({ id, name, description, icon: Icon }) => (
               <a
                 key={id}
                 href={result ? `#stage-${id}` : "#pipeline-guide"}
                 onClick={() => {
-                  if (result) setView("pipeline");
-                  else if (guide.current) guide.current.open = true;
+                  if (!result) {
+                    if (guide.current) guide.current.open = true;
+                  } else if (id !== "M7") setView("pipeline");
                 }}
               >
                 <span className="rail-icon">
@@ -973,17 +1026,27 @@ export default function App() {
                       update it.
                     </p>
                   )}
-                  <div className="report-overview">
+                  <div className="report-overview" id="stage-M7">
                     <div className="overview-heading">
-                      <h3>
-                        {result.summary.abstain
-                          ? `No verdict: fewer than ${result.summary.min_words} words`
-                          : result.summary.model_verdict === "ai"
-                            ? "Model verdict: AI"
-                            : result.summary.model_verdict === "human"
-                              ? "Model verdict: Human"
-                              : "Model verdict unavailable"}
-                      </h3>
+                      <div>
+                        <p className="report-kicker">M7 · Report</p>
+                        <h3>
+                        <span>
+                          M5a rule verdict:{" "}
+                          {verdictWord(
+                            result.summary.rule_verdict,
+                            result.summary.abstain,
+                          )}
+                        </span>
+                        <span>
+                          M5b model verdict:{" "}
+                          {verdictWord(
+                            result.summary.model_verdict,
+                            result.summary.abstain,
+                          )}
+                        </span>
+                        </h3>
+                      </div>
                       <span>
                         <Check size={12} />
                         {format(result.summary.elapsed_ms / 1000, 2)}s
@@ -996,15 +1059,17 @@ export default function App() {
                       </p>
                     )}
                     <Score
-                      label="M5b · Trained model"
-                      value={result.summary.model_score}
-                      verdict={result.summary.model_verdict}
-                      abstain={result.summary.abstain}
-                    />
-                    <Score
+                      className="score-rule"
                       label="M5a · Rule-based scorer"
                       value={result.summary.rule_score}
                       verdict={result.summary.rule_verdict}
+                      abstain={result.summary.abstain}
+                    />
+                    <Score
+                      className="score-model"
+                      label="M5b · Trained model"
+                      value={result.summary.model_score}
+                      verdict={result.summary.model_verdict}
                       abstain={result.summary.abstain}
                     />
                     <p className="score-note">
@@ -1058,9 +1123,11 @@ export default function App() {
                     <div className="console-report">
                       <div>
                         <Terminal size={13} />
-                        Original pipeline output
+                        Verdict and stage report
                       </div>
-                      <pre tabIndex={0}>{result.console_output}</pre>
+                      <pre tabIndex={0}>
+                        {reportTranscript(result, analyzedText.length)}
+                      </pre>
                     </div>
                   )}
                 </>
@@ -1073,7 +1140,7 @@ export default function App() {
               <span>
                 <BookOpen size={17} />
                 <strong>Pipeline guide</strong>
-                <span>M1–M6 stages</span>
+                <span>M1–M7</span>
               </span>
               <span className="guide-toggle">
                 View stages
@@ -1081,25 +1148,14 @@ export default function App() {
               </span>
             </summary>
             <div className="guide-content">
-              {stages.map(({ id, name, icon: Icon }, i) => (
+              {rail.map(({ id, name, icon: Icon }, i) => (
                 <div key={id}>
                   <span>
                     <Icon size={19} />
                     <small>{id}</small>
                   </span>
                   <h3>{name}</h3>
-                  <p>
-                    {
-                      [
-                        "A maximal-munch lexer identifies words, numbers, punctuation, and sentence endings.",
-                        "A symbol table tracks each word’s frequency and position in the token stream.",
-                        "A recursive-descent grammar builds sentence trees. POS automata detect structural templates.",
-                        "The feature extractor turns lexical and syntactic attributes into 89 measurable signals.",
-                        "Nine inspectable rules and a trained classifier independently score the same passage.",
-                        "Five fixed edits and one combined copy are rescored. Fragility is how often our own verdict moves.",
-                      ][i]
-                    }
-                  </p>
+                  <p>{guideBlurbs[i]}</p>
                 </div>
               ))}
             </div>

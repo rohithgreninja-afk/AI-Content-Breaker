@@ -81,8 +81,9 @@ metaphor. Build order follows the module numbers M0..M7.
   [5] firstfollow_predictability(token-bigram transition predictability)
   Return as a named structure too (dict) so features are debuggable, but the
   ordered numeric vector is what the classifier consumes.
-- Verdict: {label: "human"|"ai", confidence: float(0..1), rule_score: float,
-  clf_score: float, features: dict}.
+- Verdict: the early sketch was one label plus a confidence. The live M7
+  report does not use that. It keeps M5a and M5b separate and calls neither
+  a confidence. See the M7 section.
 
 ## M5 scoring - staged
 - Phase A (MVP): rule-based score only = hand-weighted combination of the 6
@@ -119,6 +120,22 @@ metaphor. Build order follows the module numbers M0..M7.
 - These names replace the original six-feature labels. Do not add or reorder
   `FEATURE_NAMES`; the saved classifier depends on that order.
 - Report per-edit feature delta, score delta, and flipped Y/N.
+
+## M7 CLI / reporting
+- Single entry point in `src/m7_cli.py`: text, a file, or the built-in sample
+  in; both verdicts and the M1–M6 report out. `--test` and `--eval` forward
+  to `pipeline.main`. `demo.py --text` calls this entry.
+- M7 is not a row in `STAGES` or `CORE_STAGES`. It reads the context
+  `run_pipeline` already returns. Stage disclosures stay M1–M6.
+- The workbench names this report. The rail and pipeline guide include
+  M7 Report, and that link scrolls to the verdict block. The block is
+  labeled M7 and shows both verdicts. Console and Copy report use the same
+  verdict-first transcript as `m7_cli.py`. The built-in sample is long
+  enough for a verdict and triggers all five M6 edits.
+- The early one-label verdict contract is not used. M5a (`rule_score`) and
+  M5b (`clf_score`) stay separate, and neither is called a confidence. Below
+  50 words both labels are `abstain`. The feature dict is the existing 89
+  names. Do not add or reorder `FEATURE_NAMES`.
 
 ## Repo layout to create
 ```

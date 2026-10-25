@@ -32,9 +32,12 @@ training when one is unavailable. Training activity and failures stay visible
 in the sidebar, and refreshing the page reconnects to the active job.
 
 For analysis, paste English text or load the sample, then select **Analyze
-text**. The report organizes the lexer, symbol table, parser, all 89 features,
-and rule breakdown into expandable stages. **Console** contains the same
-stage output as the command-line pipeline, and **Copy report** copies it.
+text**. The report opens with the M7 verdict block: M5a and M5b stay
+separate. The rail and pipeline guide include **M7 Report**, which scrolls
+to that block. Expandable stages underneath are M1–M6: the lexer, symbol
+table, parser, all 89 features, the rule breakdown, and the robustness
+table. **Console** and **Copy report** use the same verdict-first transcript
+as `src\m7_cli.py`.
 Inputs are limited to 50,000 characters. Below 50 words both scorers abstain;
 the pipeline details remain available. Submitted passages are not saved.
 
@@ -122,9 +125,18 @@ dependencies and NLTK tagger above, edit `demo_input.txt` and run:
 
 ```powershell
 .venv\Scripts\python.exe demo.py --text
+.venv\Scripts\python.exe src\m7_cli.py
+.venv\Scripts\python.exe src\m7_cli.py path\to\your_text.txt
+.venv\Scripts\python.exe src\m7_cli.py --text "..."
 .venv\Scripts\python.exe src\pipeline.py path\to\your_text.txt
 .venv\Scripts\python.exe src\m6_harness.py path\to\your_text.txt
 ```
+
+`m7_cli.py` is the reporting entry. It prints the M5a and M5b verdicts
+first, then the same M1–M6 stage transcript. The two scores stay separate.
+It is not an extra pipeline stage. `--test` and `--eval` still run the
+holdout checks. `demo.py --text` calls this entry. The built-in sample
+triggers all five robustness edits.
 
 `m6_harness.py` measures how this detector's own verdict moves. It applies
 five fixed edits (synonym, transition wording, coordination, template
@@ -239,6 +251,8 @@ new generators, adversarial text, other languages, or unseen domains.
 - `src/m5_training.py`: separate training-only selection and final evaluation.
 - `src/m5_estimators.py`: explicit, reproducible classifier recipes.
 - `src/pipeline.py`: `run_pipeline(text)` and the test/evaluation commands.
+- `src/m6_harness.py`: fixed robustness edits and separate M5a/M5b fragility.
+- `src/m7_cli.py`: verdict-first report for a passage, a file, or the sample.
 - `tests/`: unit and regression tests; `scripts/`: exploratory data tools.
 - `data/`: generated CSV, manifest, and fetch caches (ignored).
 - `models/`: the trained classifier and its training report.
