@@ -660,18 +660,32 @@ textarea[aria-invalid="true"] {
   gap: 9px;
 }
 .robustness-block {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid #edf0f4;
+  margin-top: 0;
 }
-.robustness-block h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
+.robustness-block > .stage-note {
+  margin-top: 0;
 }
-.robustness-block > p {
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-size: 13px;
+.robustness-scroll {
+  max-width: 100%;
+  overflow: hidden;
+}
+.robustness-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.robustness-table th {
+  font-family: "IBM Plex Sans Variable", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.robustness-table td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .source-footnote {
   display: flex;

@@ -38,11 +38,14 @@ from m5_scorer import (  # noqa: E402
 )
 
 SAMPLE = (
-    "The proposed method improves segmentation accuracy on noisy images. "
-    "Although the results are promising, we note that the training cost "
-    "remains high. Using a small graph, we show that the approach scales "
-    "to larger inputs without retuning. We also compare against three "
-    "baselines on two public benchmarks and report where each one fails."
+    "Furthermore, the proposed method improves segmentation accuracy on noisy "
+    "images and the same method remains stable across public benchmarks. "
+    "The results show that the training cost stays high while those benchmarks "
+    "stay fair for every group. We compare the approach against three baselines "
+    "and report where each one fails in practice today. A small graph shows "
+    "that the system scales to larger inputs without retuning every parameter. "
+    "This study notes the effect on performance and the change in error rates "
+    "across repeated cases during the full evaluation period."
 )
 # Below this many words both scorers abstain instead of giving a verdict.
 # The features need text to measure: on the MAGE held-out split M5b scores

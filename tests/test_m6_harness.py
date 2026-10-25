@@ -74,6 +74,12 @@ class TestEdits(unittest.TestCase):
             self.assertFalse(applied)
             self.assertEqual(edited, text)
 
+    def test_built_in_sample_triggers_every_edit(self):
+        for _edit_id, _name, _target, edit in m6_harness.EDITS:
+            edited, applied = edit(pipeline.SAMPLE)
+            self.assertTrue(applied, edit.__name__)
+            self.assertNotEqual(edited, pipeline.SAMPLE)
+
     def test_each_applicable_edit_changes_its_text(self):
         samples = {
             m6_harness.edit_synonym: "The method helps the method.",

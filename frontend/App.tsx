@@ -168,8 +168,7 @@ function fragilityLabel(
 function RobustnessTable({ report }: { report: RobustnessReport }) {
   return (
     <div className="robustness-block">
-      <h3>Robustness</h3>
-      <p>{report.purpose}</p>
+      <p className="stage-note">{report.purpose}</p>
       {report.abstain && (
         <p className="abstain-note">
           This passage has {report.n_words} words. Both scorers abstain below{" "}
@@ -194,8 +193,17 @@ function RobustnessTable({ report }: { report: RobustnessReport }) {
           )}
         />
       </dl>
-      <div className="table-scroll">
-        <table>
+      <div className="robustness-scroll">
+        <table className="robustness-table">
+          <colgroup>
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+          </colgroup>
           <thead>
             <tr>
               <th>Edit</th>
