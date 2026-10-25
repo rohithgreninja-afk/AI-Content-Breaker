@@ -667,25 +667,70 @@ textarea[aria-invalid="true"] {
 }
 .robustness-scroll {
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  container-type: inline-size;
 }
 .robustness-table {
   width: 100%;
   table-layout: fixed;
   font-size: 12px;
 }
-.robustness-table th {
-  font-family: "IBM Plex Sans Variable", sans-serif;
-  font-size: 12px;
-  font-weight: 400;
+.robustness-table td.text {
   white-space: normal;
-  overflow-wrap: anywhere;
 }
-.robustness-table td {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: normal;
-  overflow-wrap: anywhere;
+.robustness-table td.num {
+  white-space: nowrap;
+}
+.robustness-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.robustness-table .report-badge {
+  font-family: "IBM Plex Sans Variable", sans-serif;
+  padding: 1px 6px;
+}
+.robustness-table .report-badge.moved {
+  color: #79581e;
+  background: var(--ochre-wash);
+}
+@container (max-width: 560px) {
+  .robustness-table colgroup,
+  .robustness-table thead {
+    display: none;
+  }
+  .robustness-table,
+  .robustness-table tbody,
+  .robustness-table tr,
+  .robustness-table td {
+    display: block;
+    width: 100%;
+  }
+  .robustness-table tr {
+    padding: 8px 0 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .robustness-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    border-bottom: 0;
+    padding: 3px 0;
+    white-space: normal;
+    text-align: right;
+  }
+  .robustness-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-family: "IBM Plex Sans Variable", sans-serif;
+    text-align: left;
+    flex-shrink: 0;
+  }
+  .robustness-pair {
+    align-items: flex-end;
+  }
 }
 .source-footnote {
   display: flex;

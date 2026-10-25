@@ -72,6 +72,7 @@ export type RobustnessRun = {
   name: string;
   target: string;
   applied: boolean;
+  reason: string | null;
   before: number | null;
   after: number | null;
   delta: number | null;
@@ -102,6 +103,14 @@ export type RobustnessReport = {
     M5a_applied: number;
     M5b_flips: number;
     M5b_applied: number;
+    singles: {
+      M5a: number | null;
+      M5b: number | null;
+      M5a_flips: number;
+      M5a_applied: number;
+      M5b_flips: number;
+      M5b_applied: number;
+    };
   };
 };
 

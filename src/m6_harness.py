@@ -352,6 +352,16 @@ EDITS = (
     ("C", "Compound P1–P5", "", edit_compound),
 )
 
+# Fixed explanations. These are not searched for, and they do not change the edit.
+UNAPPLIED_REASONS = {
+    "P1": "no repeated listed word",
+    "P2": "no listed transition",
+    "P3": "no coordinator or short pair",
+    "P4": "no sentence-initial template",
+    "P5": "no adjacent content pair",
+    "C": "Not applied",
+}
+
 
 def _score(text: str) -> dict:
     return run_pipeline(text, stages=CORE_STAGES, show=False)
@@ -364,6 +374,7 @@ def _blank_run(spec, applied: bool, before: float | None) -> dict:
         "name": name,
         "target": target,
         "applied": applied,
+        "reason": None if applied else UNAPPLIED_REASONS[ident],
         "before": before,
         "after": None,
         "delta": None,
@@ -383,6 +394,20 @@ def _fragility(runs: list[dict], flip_key: str) -> tuple[float | None, int, int]
         return None, 0, 0
     flips = sum(1 for run in considered if run[flip_key])
     return flips / len(considered), flips, len(considered)
+
+
+def _fragility_record(runs: list[dict]) -> dict:
+    """M5a and M5b fragility for one set of runs."""
+    rule_rate, rule_flips, rule_applied = _fragility(runs, "rule_flipped")
+    model_rate, model_flips, model_applied = _fragility(runs, "model_flipped")
+    return {
+        "M5a": rule_rate,
+        "M5b": model_rate,
+        "M5a_flips": rule_flips,
+        "M5a_applied": rule_applied,
+        "M5b_flips": model_flips,
+        "M5b_applied": model_applied,
+    }
 
 
 def evaluate(text: str, baseline: dict | None = None) -> dict:
@@ -418,6 +443,7 @@ def evaluate(text: str, baseline: dict | None = None) -> dict:
             "name": spec[1],
             "target": target,
             "applied": True,
+            "reason": None,
             "before": before,
             "after": after,
             "delta": None if after is None or before is None else after - before,
@@ -432,8 +458,9 @@ def evaluate(text: str, baseline: dict | None = None) -> dict:
             ),
         })
 
-    rule_rate, rule_flips, rule_applied = _fragility(runs, "rule_flipped")
-    model_rate, model_flips, model_applied = _fragility(runs, "model_flipped")
+    fragility = _fragility_record(runs)
+    fragility["singles"] = _fragility_record(
+        [run for run in runs if run["id"] != "C"])
     return {
         "abstain": baseline["abstain"],
         "n_words": baseline["n_words"],
@@ -446,14 +473,7 @@ def evaluate(text: str, baseline: dict | None = None) -> dict:
             "model_verdict": model_verdict,
         },
         "runs": runs,
-        "fragility": {
-            "M5a": rule_rate,
-            "M5b": model_rate,
-            "M5a_flips": rule_flips,
-            "M5a_applied": rule_applied,
-            "M5b_flips": model_flips,
-            "M5b_applied": model_applied,
-        },
+        "fragility": fragility,
     }
 
 
@@ -484,7 +504,7 @@ def format_report(report: dict) -> str:
     )
     for run in report["runs"]:
         if not run["applied"]:
-            state = "not applied"
+            state = run.get("reason") or "not applied"
         elif report["abstain"]:
             state = "not scored (baseline abstains)"
         else:
@@ -493,12 +513,21 @@ def format_report(report: dict) -> str:
                      f"delta {_delta(run['delta'])}")
         lines.append(
             f"{run['id']:3} {run['name']:24} {state}  "
+            f"M5a change={_delta(run['rule_delta'])}  "
+            f"M5b change={_delta(run['model_delta'])}  "
             f"M5a flip={_yn(run['rule_flipped'])}  "
             f"M5b flip={_yn(run['model_flipped'])}"
         )
     fragility = report["fragility"]
+    singles = fragility["singles"]
     lines.append(
-        f"fragility M5a={_num(fragility['M5a'])} "
+        f"fragility P1–P5 M5a={_num(singles['M5a'])} "
+        f"({singles['M5a_flips']}/{singles['M5a_applied']})  "
+        f"M5b={_num(singles['M5b'])} "
+        f"({singles['M5b_flips']}/{singles['M5b_applied']})"
+    )
+    lines.append(
+        f"fragility with compound M5a={_num(fragility['M5a'])} "
         f"({fragility['M5a_flips']}/{fragility['M5a_applied']})  "
         f"M5b={_num(fragility['M5b'])} "
         f"({fragility['M5b_flips']}/{fragility['M5b_applied']})"

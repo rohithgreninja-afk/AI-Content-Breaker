@@ -109,9 +109,22 @@ class TestReport(unittest.TestCase):
         report = m6_harness.evaluate(" ".join(["hello"] * 60) + ".")
         self.assertFalse(report["abstain"])
         self.assertTrue(all(not run["applied"] for run in report["runs"]))
+        self.assertEqual(
+            {run["id"]: run["reason"] for run in report["runs"]},
+            {
+                "P1": "no repeated listed word",
+                "P2": "no listed transition",
+                "P3": "no coordinator or short pair",
+                "P4": "no sentence-initial template",
+                "P5": "no adjacent content pair",
+                "C": "Not applied",
+            },
+        )
         self.assertIsNone(report["fragility"]["M5a"])
         self.assertEqual(report["fragility"]["M5a_applied"], 0)
         self.assertIsNone(report["fragility"]["M5b"])
+        self.assertIsNone(report["fragility"]["singles"]["M5a"])
+        self.assertEqual(report["fragility"]["singles"]["M5a_applied"], 0)
 
     def test_same_input_gives_the_same_report(self):
         text = " ".join(["hello"] * 60) + "."
@@ -128,7 +141,7 @@ class TestReport(unittest.TestCase):
         self._almost(left["baseline"]["model_score"], right["baseline"]["model_score"])
         self.assertEqual(len(left["runs"]), len(right["runs"]))
         for one, two in zip(left["runs"], right["runs"]):
-            for key in ("id", "name", "target", "applied", "rule_flipped", "model_flipped"):
+            for key in ("id", "name", "target", "applied", "reason", "rule_flipped", "model_flipped"):
                 self.assertEqual(one[key], two[key])
             for key in ("before", "after", "delta", "rule_score", "model_score",
                         "rule_delta", "model_delta"):
@@ -141,6 +154,36 @@ class TestReport(unittest.TestCase):
             self.assertIsNone(right)
         else:
             self.assertAlmostEqual(left, right, places=5)
+
+    def test_report_names_score_changes_and_both_fragilities(self):
+        printed = m6_harness.format_report({
+            "purpose": "purpose",
+            "n_words": 60,
+            "abstain": False,
+            "baseline": {
+                "rule_score": 0.5, "model_score": 0.4,
+                "rule_verdict": "ai", "model_verdict": "human",
+            },
+            "runs": [{
+                "id": "C", "name": "Compound P1–P5", "target": "",
+                "applied": True, "reason": None, "before": None, "after": None,
+                "delta": None, "rule_delta": -0.02, "model_delta": 0.01,
+                "rule_flipped": False, "model_flipped": False,
+            }],
+            "fragility": {
+                "M5a": 0.0, "M5b": 0.0, "M5a_flips": 0, "M5a_applied": 1,
+                "M5b_flips": 0, "M5b_applied": 1,
+                "singles": {
+                    "M5a": None, "M5b": None, "M5a_flips": 0, "M5a_applied": 0,
+                    "M5b_flips": 0, "M5b_applied": 0,
+                },
+            },
+        })
+        self.assertIn("scores only", printed)
+        self.assertIn("M5a change=-0.0200", printed)
+        self.assertIn("M5b change=+0.0100", printed)
+        self.assertIn("fragility P1–P5", printed)
+        self.assertIn("fragility with compound", printed)
 
     def test_rich_passage_stays_inside_the_fragility_range(self):
         report = m6_harness.evaluate(RICH)
@@ -161,6 +204,17 @@ class TestReport(unittest.TestCase):
                 self.assertLessEqual(rate, 1.0)
                 self.assertEqual(
                     report["fragility"][flips_key] / counted, rate)
+            singles = report["fragility"]["singles"]
+            single_rate = singles[key]
+            single_counted = singles[applied_key]
+            compound = next(run for run in report["runs"] if run["id"] == "C")
+            flip_field = "rule_flipped" if key == "M5a" else "model_flipped"
+            extra = 1 if compound["applied"] and compound[flip_field] is not None else 0
+            self.assertEqual(counted, single_counted + extra)
+            if single_counted == 0:
+                self.assertIsNone(single_rate)
+            else:
+                self.assertEqual(singles[flips_key] / single_counted, single_rate)
 
     def test_scoring_core_excludes_the_harness(self):
         self.assertEqual(

@@ -110,7 +110,8 @@ metaphor. Build order follows the module numbers M0..M7.
 - Five deterministic edits, each reported against one existing M4 feature,
   plus a compound run that applies P1–P5 in order. Fragility is the fraction
   of *applied* runs whose verdict differs from the baseline, reported
-  separately for M5a and M5b. An edit that cannot apply is excluded. Below
+  separately for M5a and M5b, once for P1–P5 and once with the compound
+  copy included. An edit that cannot apply is excluded and named. Below
   the 50-word gate the baseline abstains and no flip is claimed.
   P1 synonym substitution of a repeated content word -> lex_type_token_ratio
   P2 transition words replaced with plain wording    -> lex_transition_rate

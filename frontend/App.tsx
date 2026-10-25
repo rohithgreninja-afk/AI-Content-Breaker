@@ -37,6 +37,7 @@ import {
   type Analysis,
   type ModelStatus,
   type RobustnessReport,
+  type RobustnessRun,
   type Rule,
 } from "./api";
 
@@ -206,6 +207,39 @@ function flipLabel(value: boolean | null) {
   return value ? "Yes" : "No";
 }
 
+function featureLabel(run: RobustnessRun) {
+  if (!run.applied) return run.reason || "Not applied";
+  return run.target || "scores only";
+}
+
+function signedChange(value: number | null) {
+  if (value === null) return "—";
+  return `${value > 0 ? "+" : ""}${format(value, 4)}`;
+}
+
+function ScorePair({
+  change,
+  flipped,
+}: {
+  change: number | null;
+  flipped: boolean | null;
+}) {
+  if (change === null && flipped === null) return "—";
+  return (
+    <span className="robustness-pair">
+      <span>{signedChange(change)}</span>
+      {flipped !== null && (
+        <span
+          className={`report-badge${flipped ? " moved" : ""}`}
+          title={flipped ? "Verdict flipped" : "Verdict held"}
+        >
+          {flipLabel(flipped)}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function fragilityLabel(
   rate: number | null,
   flips: number,
@@ -227,7 +261,23 @@ function RobustnessTable({ report }: { report: RobustnessReport }) {
       )}
       <dl className="metric-grid report-metrics">
         <Metric
-          label="M5a fragility"
+          label="M5a P1–P5"
+          value={fragilityLabel(
+            report.fragility.singles.M5a,
+            report.fragility.singles.M5a_flips,
+            report.fragility.singles.M5a_applied,
+          )}
+        />
+        <Metric
+          label="M5b P1–P5"
+          value={fragilityLabel(
+            report.fragility.singles.M5b,
+            report.fragility.singles.M5b_flips,
+            report.fragility.singles.M5b_applied,
+          )}
+        />
+        <Metric
+          label="M5a with compound"
           value={fragilityLabel(
             report.fragility.M5a,
             report.fragility.M5a_flips,
@@ -235,7 +285,7 @@ function RobustnessTable({ report }: { report: RobustnessReport }) {
           )}
         />
         <Metric
-          label="M5b fragility"
+          label="M5b with compound"
           value={fragilityLabel(
             report.fragility.M5b,
             report.fragility.M5b_flips,
@@ -247,12 +297,12 @@ function RobustnessTable({ report }: { report: RobustnessReport }) {
         <table className="robustness-table">
           <colgroup>
             <col style={{ width: "18%" }} />
-            <col style={{ width: "24%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "9%" }} />
+            <col style={{ width: "27%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -261,26 +311,37 @@ function RobustnessTable({ report }: { report: RobustnessReport }) {
               <th>Before</th>
               <th>After</th>
               <th>Delta</th>
-              <th>M5a flip</th>
-              <th>M5b flip</th>
+              <th>M5a</th>
+              <th>M5b</th>
             </tr>
           </thead>
           <tbody>
             {report.runs.map((run) => (
               <tr key={run.id}>
-                <td>
+                <td className="text" data-label="Edit">
                   {run.id} {run.name}
                 </td>
-                <td>{run.applied ? run.target || "—" : "Not applied"}</td>
-                <td>{run.before === null ? "—" : format(run.before, 4)}</td>
-                <td>{run.after === null ? "—" : format(run.after, 4)}</td>
-                <td>
-                  {run.delta === null
-                    ? "—"
-                    : `${run.delta > 0 ? "+" : ""}${format(run.delta, 4)}`}
+                <td className="text" data-label="Feature">
+                  {featureLabel(run)}
                 </td>
-                <td>{flipLabel(run.rule_flipped)}</td>
-                <td>{flipLabel(run.model_flipped)}</td>
+                <td className="num" data-label="Before">
+                  {run.before === null ? "—" : format(run.before, 4)}
+                </td>
+                <td className="num" data-label="After">
+                  {run.after === null ? "—" : format(run.after, 4)}
+                </td>
+                <td className="num" data-label="Delta">
+                  {signedChange(run.delta)}
+                </td>
+                <td className="num" data-label="M5a">
+                  <ScorePair change={run.rule_delta} flipped={run.rule_flipped} />
+                </td>
+                <td className="num" data-label="M5b">
+                  <ScorePair
+                    change={run.model_delta}
+                    flipped={run.model_flipped}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -344,7 +405,7 @@ function PipelineReport({ result }: { result: Analysis }) {
                   `${rules.fired.length} rule${rules.fired.length === 1 ? "" : "s"} fired`,
                   result.robustness.abstain
                     ? "no flip claimed"
-                    : `M5b ${fragilityLabel(result.robustness.fragility.M5b, result.robustness.fragility.M5b_flips, result.robustness.fragility.M5b_applied)}`,
+                    : `M5b P1–P5 ${fragilityLabel(result.robustness.fragility.singles.M5b, result.robustness.fragility.singles.M5b_flips, result.robustness.fragility.singles.M5b_applied)}`,
                 ][index]
               }
             </span>
