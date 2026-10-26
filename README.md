@@ -153,11 +153,12 @@ Passages under 50 words abstain, and no flip is claimed. Rescoring uses
 M1–M5 only, so the harness does not edit a passage and then measure that
 edit again.
 
-`m8_humanize.py` is a separate translation pass. A fired M5a rule selects
-one fixed rewrite, then M1–M5 score the passage again. M5b is reported and
-does not choose the rewrite. The pass stops when both verdicts read human,
-no fired rule still has a rewrite, or six rewrites have been applied.
-Short passages are left unchanged. It is not an analysis stage.
+`m8_humanize.py` is a separate translation pass. Each run applies one
+rewrite that lowers the M5b score, including after the verdict already
+reads human. Running it again on the rewritten passage applies the next
+one. The workbench **Humanize text** button does that on each press while
+the source field is unchanged. Short passages are left unchanged. It is
+not an analysis stage.
 
 ```powershell
 .venv\Scripts\python.exe src\m8_humanize.py

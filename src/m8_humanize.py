@@ -1,9 +1,9 @@
 """M8: attribute-directed translation.
 
 M5a names the synthesized attributes that sit on the AI side of a frozen
-rule. This pass applies the one rewrite registered for the first such
-attribute, then runs M1–M5 again. It is an entry point, not a pipeline
-stage, and it does not search the M5b score.
+rule. This pass applies rewrites that lower the detector score, then runs
+M1–M5 again. A human verdict does not stop it. Calling it again on the
+returned text continues. It is an entry point, not a pipeline stage.
 
     python src/m8_humanize.py
     python src/m8_humanize.py path\\to\\text.txt
@@ -28,8 +28,8 @@ from m6_harness import (  # noqa: E402
 )
 from pipeline import CORE_STAGES, MIN_WORDS, SAMPLE, run_pipeline  # noqa: E402
 
-# One compiler pass budget. Each pass applies a single rewrite family.
-MAX_PASSES = 6
+# One rewrite per call. The next call continues from the returned text.
+MAX_PASSES = 1
 # A leading word is the subject side; these open a later clause.
 SUBORDINATORS = frozenset({"because", "although", "while", "which", "if"})
 # M5a can fire this rule, and no local rewrite lowers the verb share
@@ -240,76 +240,95 @@ def _side(ctx: dict) -> dict:
     }
 
 
+def _tracked(ctx: dict) -> float | None:
+    """The AI score a later press has to push down. M5b when a model is loaded."""
+    if ctx["model_score"] is not None:
+        return ctx["model_score"]
+    return ctx["rules"]["score"]
+
+
+def _candidate(text: str, ctx: dict, ident: str, name: str,
+               chosen: str, rewrite) -> dict | None:
+    """One rewrite, kept only when it lowers the tracked AI score."""
+    rewritten, applied = rewrite(text)
+    if not applied or rewritten == text:
+        return None
+    nxt = _score(rewritten)
+    if nxt["abstain"] or nxt["n_words"] < MIN_WORDS:
+        return None
+    old = _tracked(ctx)
+    new = _tracked(nxt)
+    if old is None or new is None or not new < old:
+        return None
+    model_delta = None
+    if ctx["model_score"] is not None and nxt["model_score"] is not None:
+        model_delta = nxt["model_score"] - ctx["model_score"]
+    return {
+        "family": ident,
+        "name": name,
+        "attribute": chosen,
+        "feature_before": ctx["features"][chosen],
+        "feature_after": nxt["features"][chosen],
+        "feature_delta": nxt["features"][chosen] - ctx["features"][chosen],
+        "rule_score": nxt["rules"]["score"],
+        "rule_delta": nxt["rules"]["score"] - ctx["rules"]["score"],
+        "model_score": nxt["model_score"],
+        "model_delta": model_delta,
+        "rule_verdict": nxt["verdicts"]["M5a"],
+        "model_verdict": nxt["verdicts"]["M5b"],
+        "text": rewritten,
+        "_ctx": nxt,
+    }
+
+
 def _one_pass(text: str, ctx: dict) -> dict | None:
-    """Apply the first fired family's rewrite, or None when none applies."""
+    """Apply the first rewrite that lowers the score.
+
+    Fired M5a rules are tried first. A rule that is no longer fired can
+    still run, so another press can keep lowering the score after both
+    verdicts already read human.
+    """
     fired = {row[0] for row in ctx["rules"]["fired"]}
-    for ident, name, attributes, rewrite in FAMILIES:
-        chosen = next((attribute for attribute in attributes if attribute in fired), None)
-        if chosen is None:
-            continue
-        rewritten, applied = rewrite(text)
-        if not applied or rewritten == text:
-            continue
-        nxt = _score(rewritten)
-        if nxt["n_words"] < MIN_WORDS:
-            continue
-        before = ctx["features"][chosen]
-        after = nxt["features"][chosen]
-        model_delta = None
-        if ctx["model_score"] is not None and nxt["model_score"] is not None:
-            model_delta = nxt["model_score"] - ctx["model_score"]
-        return {
-            "family": ident,
-            "name": name,
-            "attribute": chosen,
-            "feature_before": before,
-            "feature_after": after,
-            "feature_delta": after - before,
-            "rule_score": nxt["rules"]["score"],
-            "rule_delta": nxt["rules"]["score"] - ctx["rules"]["score"],
-            "model_score": nxt["model_score"],
-            "model_delta": model_delta,
-            "rule_verdict": nxt["verdicts"]["M5a"],
-            "model_verdict": nxt["verdicts"]["M5b"],
-            "text": rewritten,
-            "_ctx": nxt,
-        }
+    ranked = [spec for spec in FAMILIES if any(attr in fired for attr in spec[2])]
+    rest = [spec for spec in FAMILIES if spec not in ranked]
+    for ident, name, attributes, rewrite in (*ranked, *rest):
+        chosen = next((attr for attr in attributes if attr in fired), attributes[0])
+        step = _candidate(text, ctx, ident, name, chosen, rewrite)
+        if step is not None:
+            return step
     return None
 
 
 def humanize(text: str) -> dict:
-    """Rewrite text from fired M5a rules until a stop condition.
+    """Lower the detector score by one rewrite.
 
-    Stop when both verdicts are human, no fired attribute still has a
-    rewrite, or MAX_PASSES rewrites have been applied. Under MIN_WORDS the
-    text is returned unchanged and neither verdict is claimed.
+    A human verdict does not stop the pass. Another call on the returned
+    text applies the next rewrite that still lowers the score. Under
+    MIN_WORDS the text is unchanged and neither verdict is claimed.
     """
     ctx = _score(text)
     before = _side(ctx)
     if ctx["abstain"]:
         return _finish(text, before, before, [], False, "abstain", ctx)
-    if _passed(ctx):
-        return _finish(text, before, before, [], True, "already_human", ctx)
+    started_human = _passed(ctx)
 
+    step = _one_pass(text, ctx)
     steps: list[dict] = []
-    current = text
-    for _pass in range(MAX_PASSES):
-        step = _one_pass(current, ctx)
-        if step is None:
-            break
+    if step is not None:
         ctx = step.pop("_ctx")
-        current = step["text"]
+        text = step["text"]
         steps.append(step)
-        if _passed(ctx):
-            break
+    more = _one_pass(text, ctx) is not None
     passed = _passed(ctx)
-    if passed:
-        reason = "passed"
-    elif len(steps) >= MAX_PASSES:
+    if not steps:
+        reason = "already_human" if started_human else "no_rewrite"
+    elif more:
         reason = "budget"
+    elif passed:
+        reason = "passed"
     else:
         reason = "no_rewrite"
-    return _finish(current, before, _side(ctx), steps, passed, reason, ctx)
+    return _finish(text, before, _side(ctx), steps, passed, reason, ctx)
 
 
 def _finish(text: str, before: dict, after: dict, steps: list[dict],

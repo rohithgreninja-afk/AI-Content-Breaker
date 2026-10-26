@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-10-26: M8 keeps lowering the score
+
+- A human verdict no longer ends a translation pass. Each call applies one
+  rewrite that lowers the M5b score, and the next call continues from that
+  text. The workbench **Humanize text** button sends the latest rewrite
+  when the source field has not been edited.
+
 ## 2026-10-25: M8 documentation
 
 - README now opens with M0–M7 as the detector and M8 as the separate

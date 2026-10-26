@@ -164,17 +164,26 @@ class TestSchedule(unittest.TestCase):
         self.assertEqual(report["text"], original)
         self.assertEqual(report["reason"], "no_rewrite")
 
-    def test_budget_stops_at_six_passes(self):
+    def test_each_call_applies_one_lowering_rewrite(self):
         def commas(text):
             return text + ",", True
 
+        def score(text):
+            ctx = _ctx("ai")
+            ctx["rules"]["score"] = 0.9 - 0.05 * text.count(",")
+            ctx["model_score"] = ctx["rules"]["score"]
+            return ctx
+
         families = (("punctuation", "Insert commas", ("punct_comma_rate",), commas),)
-        with patch.object(m8_humanize, "_score", return_value=_ctx("ai")), \
+        with patch.object(m8_humanize, "_score", side_effect=score), \
                 patch.object(m8_humanize, "FAMILIES", families):
-            report = m8_humanize.humanize("word " * 60)
-        self.assertEqual(len(report["steps"]), m8_humanize.MAX_PASSES)
-        self.assertEqual(report["reason"], "budget")
-        self.assertFalse(report["passed"])
+            first = m8_humanize.humanize("word " * 60)
+            second = m8_humanize.humanize(first["text"])
+        self.assertEqual(len(first["steps"]), 1)
+        self.assertEqual(first["reason"], "budget")
+        self.assertLess(first["after"]["model_score"], first["before"]["model_score"])
+        self.assertEqual(len(second["steps"]), 1)
+        self.assertLess(second["after"]["model_score"], first["after"]["model_score"])
 
     def test_module_is_not_a_pipeline_stage(self):
         names = [name for name, _run, _show in pipeline.STAGES]
@@ -189,19 +198,22 @@ class TestLiveSample(unittest.TestCase):
         report = m8_humanize.humanize(pipeline.SAMPLE)
         self.assertEqual(Path(MODEL_PATH).read_bytes(), before_model)
         self.assertGreaterEqual(report["after"]["n_words"], pipeline.MIN_WORDS)
-        ctx = pipeline.run_pipeline(pipeline.SAMPLE, stages=pipeline.CORE_STAGES, show=False)
+        self.assertLess(report["after"]["model_score"], report["before"]["model_score"])
         current = pipeline.SAMPLE
+        previous = report["before"]["model_score"]
         for step in report["steps"]:
-            fired = {row[0] for row in ctx["rules"]["fired"]}
-            self.assertIn(step["attribute"], fired)
             self.assertNotEqual(step["text"], current)
+            self.assertLess(step["model_score"], previous)
             current = step["text"]
+            previous = step["model_score"]
             ctx = pipeline.run_pipeline(current, stages=pipeline.CORE_STAGES, show=False)
             self.assertGreaterEqual(ctx["n_words"], pipeline.MIN_WORDS)
         self.assertEqual(report["text"], current)
-        if report["passed"]:
-            self.assertEqual(ctx["verdicts"]["M5a"], "human")
-            self.assertEqual(ctx["verdicts"]["M5b"], "human")
+        again = m8_humanize.humanize(report["text"])
+        if again["steps"]:
+            self.assertLess(again["after"]["model_score"], again["before"]["model_score"])
+        else:
+            self.assertIn(again["reason"], ("already_human", "no_rewrite"))
         rendered = m8_humanize.format_report(report)
         self.assertIn("M8 attribute-directed translation", rendered)
         self.assertIn(f"result: {report['reason']}", rendered)

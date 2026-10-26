@@ -616,18 +616,21 @@ function humanizeNote(report: HumanizeReport) {
     return `This passage has ${report.before.n_words} words. Both scorers abstain below ${report.min_words} words, so the passage was left unchanged.`;
   }
   if (report.reason === "already_human") {
-    return "Both verdicts already read human. The passage was left unchanged.";
+    return "No further rewrite lowered the score. Pressing Humanize text again leaves this passage unchanged.";
   }
   if (report.reason === "passed") {
-    return "Both verdicts read human after the translation passes. A human verdict is this detector’s output.";
+    return "The score is lower, and no further rewrite lowers it. A human verdict is this detector’s output.";
   }
   if (report.reason === "budget") {
-    return `Stopped after ${report.max_passes} passes. One or both verdicts still read AI.`;
+    return "The score is lower. Press Humanize text again to keep lowering it.";
+  }
+  if (report.steps.length > 0) {
+    return "The score is lower, and no further rewrite lowers it.";
   }
   const verb = report.unsupported.includes("pos_verb_rate")
     ? " pos_verb_rate is still fired, and that rule has no meaning-preserving rewrite."
     : "";
-  return `No remaining fired rule has a rewrite.${verb}`;
+  return `No further rewrite lowered the score.${verb}`;
 }
 
 function HumanizeBlock({
@@ -831,7 +834,8 @@ export default function App() {
     null,
   );
   const [humanize, setHumanize] = useState<HumanizeReport | null>(null);
-  const [humanizedText, setHumanizedText] = useState("");
+  const [humanizeAnchor, setHumanizeAnchor] = useState("");
+  const [humanizeInput, setHumanizeInput] = useState("");
   const [copiedRewrite, setCopiedRewrite] = useState(false);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [error, setError] = useState("");
@@ -851,7 +855,7 @@ export default function App() {
   const maxCharacters = model?.max_characters || 50000;
   const training = model?.training.running || false;
   const stale = !!result && text !== analyzedText;
-  const rewriteStale = !!humanize && text !== humanizedText;
+  const rewriteStale = !!humanize && text !== humanizeAnchor;
   const busy = analyzing || humanizing;
 
   useEffect(() => {
@@ -978,7 +982,9 @@ export default function App() {
       input.current?.focus();
       return;
     }
-    const submitted = text;
+    const continuing =
+      reportMode === "humanize" && humanize !== null && text === humanizeAnchor;
+    const submitted = continuing && humanize ? humanize.text : text;
     setReportMode("humanize");
     setHumanizing(true);
     setError("");
@@ -991,7 +997,8 @@ export default function App() {
       );
       if (!mounted.current) return;
       setHumanize(report);
-      setHumanizedText(submitted);
+      setHumanizeInput(submitted);
+      setHumanizeAnchor(continuing ? humanizeAnchor : text);
       window.requestAnimationFrame(() =>
         document.getElementById("stage-M8")?.scrollIntoView({ block: "nearest" }),
       );
@@ -1021,7 +1028,8 @@ export default function App() {
   function useRewrite() {
     if (!humanize) return;
     setText(humanize.text);
-    setHumanizedText(humanize.text);
+    setHumanizeAnchor(humanize.text);
+    setHumanizeInput(humanize.text);
     setError("");
     input.current?.focus();
   }
@@ -1378,9 +1386,9 @@ export default function App() {
               </div>
               {reportMode === "humanize" && humanize && (
                 <HumanizeBlock
-                  key={humanizedText}
+                  key={humanizeInput}
                   report={humanize}
-                  source={humanizedText}
+                  source={humanizeInput}
                   stale={rewriteStale}
                   copied={copiedRewrite}
                   onCopy={copyRewrite}

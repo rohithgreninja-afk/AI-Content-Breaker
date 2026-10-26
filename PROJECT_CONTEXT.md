@@ -144,17 +144,20 @@ like M7, and is not one of the six analysis stages.
 - Implemented in `src/m8_humanize.py`. It is not a row in `STAGES` or
   `CORE_STAGES`. Analyze and M6 keep scoring the original text. M6 stays a
   measurement table and does not call M8.
-- The rewrite is chosen because an M5a rule fired. M5b is measured after the
-  pass and does not choose the edit. ExtraTrees has no readable coefficients.
+- Fired M5a rules are tried first. A rewrite is kept only when it lowers
+  the M5b score, or the M5a score when no model is loaded. A rule that is
+  no longer fired can still run, so a later call can keep lowering the score.
 - One family per pass, in fixed order: coordinated split (`parse_mean_depth`,
   `parse_mean_nodes`, `parse_mean_branching`), subordinator split
   (`parse_mean_subordinate`), commas before bare coordinators
   (`punct_comma_rate`, `pos_punct_rate`), synonym collapse (`rep_dis_rate`),
   later-repeat replacement (`rep_stdev_repeat_gap_log`). `pos_verb_rate` has
   no meaning-preserving rewrite and is named when it is still fired.
-- Stop when both verdicts are human, no fired attribute still has a rewrite,
-  or 6 passes have run. Under 50 words the text is unchanged and no pass is
-  claimed. A human verdict remains a model output, not proof of authorship.
+- A human verdict does not stop the pass. Each call applies one rewrite
+  that lowers the score, and calling it again on the returned text applies
+  the next one. It stops when no rewrite lowers the score. Under 50 words
+  the text is unchanged and no pass is claimed. A human verdict remains a
+  model output, not proof of authorship.
 - Edits use the M6 lexer spans. Parse trees are not rewritten, because most
   sentences are partial parses.
 - Run: `python src/m8_humanize.py`, a file path, or `--text`. The workbench
